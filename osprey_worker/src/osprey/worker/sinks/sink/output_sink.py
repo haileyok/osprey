@@ -19,7 +19,7 @@ from osprey.worker.lib.storage.labels import LabelsProvider
 
 logger = get_logger()
 
-DEFAULT_GEVENT_TIMEOUT = 2
+DEFAULT_GEVENT_TIMEOUT = 5
 
 
 class BaseOutputSink(abc.ABC):

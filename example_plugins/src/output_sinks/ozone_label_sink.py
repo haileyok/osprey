@@ -1,7 +1,7 @@
 import logging
 import threading
 from datetime import datetime, timedelta
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import requests
 from osprey.engine.executor.execution_context import ExecutionResult
@@ -14,10 +14,10 @@ logger = logging.getLogger('ozone_label_sink')
 
 class BlueskySession:
     def __init__(self, config: Config):
-        self._session_lock = threading.Lock()
-        self._access_jwt = None
-        self._refresh_jwt = None
-        self._did = None
+        self._session_lock = threading.RLock()
+        self._access_jwt: Optional[str] = None
+        self._refresh_jwt: Optional[str] = None
+        self._did: Optional[str] = None
         self._last_refresh = None
         self._refresh_interval = timedelta(minutes=30)
 
@@ -30,9 +30,9 @@ class BlueskySession:
                 'OSPREY_BLUESKY_IDENTIFIER and OSPREY_BLUESKY_PASSWORD must be set in environment variables'
             )
 
-        self._refresh_session()
+        self._create_session()
 
-    def _refresh_session(self):
+    def _create_session(self):
         """Refresh the session by logging in or refreshing the token."""
         with self._session_lock:
             try:
@@ -56,16 +56,32 @@ class BlueskySession:
                 logger.error(f'Failed to refresh Bluesky session: {e}')
                 raise
 
-    def get_session(self):
-        """Get the current session, refreshing if necessary."""
+    def _refresh_session(self):
+        """Refresh the current session"""
+        with self._session_lock:
+            response = requests.post(
+                f'{self._pds_url}/xrpc/com.atproto.server.refreshSession',
+                headers={'authorization': f'Bearer {self._refresh_jwt}'},
+            )
+            response.raise_for_status()
+            data = response.json()
+            self._access_jwt = data['accessJwt']
+            self._refresh_jwt = data['refreshJwt']
+            self._last_refresh = datetime.now()
+
+    def get_did(self):
+        return self._did
+
+    def get_headers(self):
+        """Get the headers, refreshing if necessary"""
         with self._session_lock:
             if self._last_refresh is None or datetime.now() - self._last_refresh >= self._refresh_interval:
                 self._refresh_session()
 
             return {
-                'access_jwt': self._access_jwt,
-                'refresh_jwt': self._refresh_jwt,
-                'did': self._did,
+                'accept': '*/*',
+                'content-type': 'application/json',
+                'authorization': f'Bearer {self._access_jwt}',
             }
 
 
@@ -83,12 +99,9 @@ class OzoneLabelSink(BaseOutputSink):
         logger.info('Initialized Ozone labels sink')
 
     def will_do_work(self, result: ExecutionResult) -> bool:
-        return True
+        return len(result.effects) > 0
 
     def push(self, result: ExecutionResult) -> None:
-        if len(result.effects) == 0:
-            return
-
         action_id = result.action.action_id
 
         for effects in result.effects.values():
@@ -104,8 +117,6 @@ class OzoneLabelSink(BaseOutputSink):
             return
 
         try:
-            session = self._session.get_session()
-
             subject: Dict[str, str] = {}
             if effect.entity.startswith('did:'):
                 subject['$type'] = 'com.atproto.admin.defs#repoRef'
@@ -117,7 +128,7 @@ class OzoneLabelSink(BaseOutputSink):
 
             payload: Dict[str, Any] = {
                 'subject': subject,
-                'createdBy': session['did'],
+                'createdBy': self._session.get_did(),
                 'subjectBlobCids': [],
                 'event': {
                     '$type': 'tools.ozone.moderation.defs#modEventLabel',
@@ -129,13 +140,7 @@ class OzoneLabelSink(BaseOutputSink):
                 'modTool': {'name': 'osprey', 'meta': {'actionId': str(action_id)}},
             }
 
-            headers = {
-                'accept': '*/*',
-                'atproto-accept-labelers': f'{self._labeler_did};redact',
-                'atproto-proxy': f'{self._labeler_did}#atproto_labeler',
-                'content-type': 'application/json',
-                'authorization': f'Bearer {session["access_jwt"]}',
-            }
+            headers = self._apply_moderation_headers(self._session.get_headers())
 
             response = requests.post(
                 f'{self._pds_url}/xrpc/tools.ozone.moderation.emitEvent',
@@ -148,6 +153,12 @@ class OzoneLabelSink(BaseOutputSink):
 
         except Exception as e:
             logger.error(f'Failed to emit label event: {e}')
+
+    def _apply_moderation_headers(self, base_headers: Dict[str, Any]):
+        headers = base_headers.copy()
+        headers['atproto-accept-labelers'] = f'{self._labeler_did};redact'
+        headers['atproto-proxy'] = f'{self._labeler_did}#atproto_labeler'
+        return headers
 
     def stop(self) -> None:
         pass
