@@ -126,7 +126,7 @@ class OzoneLabelSink(BaseOutputSink):
                     'negateLabelVals': [],
                     'durationInHours': effect.expiration_in_hours or 0,
                 },
-                'modTool': {'name': 'osprey', 'actionId': str(action_id)},
+                'modTool': {'name': 'osprey', 'meta': {'actionId': str(action_id)}},
             }
 
             headers = {
