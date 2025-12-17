@@ -279,7 +279,7 @@ services:
     restart: "no"
 
   at-kafka:
-    image: ghcr.io/haileyok/at-kafka:main-85372d9
+    image: ghcr.io/haileyok/at-kafka:main-77d1562
     depends_on:
       kafka:
         condition: service_healthy
