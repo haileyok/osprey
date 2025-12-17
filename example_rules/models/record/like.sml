@@ -1,5 +1,8 @@
 LikeSubject: Entity[str] = EntityJson(
   type='AtUri',
   path='$.operation.record.subject.uri',
-  required=False,
+  required=True,
+  coerce_type=True,
 )
+
+LikeSubjectDid: Optional[str] = DidFromUri(uri=LikeSubject)

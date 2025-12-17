@@ -18,6 +18,44 @@ PdsHost: Entity[str] = EntityJson(
   required=False,
 )
 
+DisplayName: str = JsonData(
+  path='$.eventMetadata.profile.displayName',
+  required=False,
+  coerce_type=True,
+)
+
+FollowersCount: int = JsonData(
+  path='$.eventMetadata.profile.followersCount',
+  required=False,
+  coerce_type=True,
+)
+
+FollowingCount: int = JsonData(
+  path='$.eventMetadata.profile.followingCount',
+  required=False,
+  coerce_type=True,
+)
+
+PostsCount: int = JsonData(
+  path='$.eventMetadata.profile.postsCount',
+  required=False,
+  coerce_type=True,
+)
+
+Avatar: Optional[str] = JsonData(
+  path='$.eventMetadata.profile.avatar',
+  required=False,
+)
+
+Banner: Optional[str] = JsonData(
+  path='$.eventMetadata.profile.banner',
+  required=False,
+)
+
+HasAvatar = Avatar != None
+
+HasBanner = Banner != None
+
 AccountCreatedAt: Optional[str] = JsonData(
   path='$.eventMetadata.didCreatedAt',
   required=False,

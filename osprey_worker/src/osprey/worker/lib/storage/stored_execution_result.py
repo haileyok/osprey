@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence
 import gevent
 import google.cloud.storage as storage
 import pytz
+import urllib3
 from google.api_core import retry
 from google.cloud.bigtable import row_filters, row_set
 from google.cloud.bigtable.row import Row
@@ -375,7 +376,11 @@ class StoredExecutionResultGCS(ExecutionResultStore):
 
 class StoredExecutionResultMinIO(ExecutionResultStore):
     def __init__(self, endpoint: str, access_key: str, secret_key: str, secure: bool, bucket_name: str):
-        self._minio_client = Minio(endpoint, access_key=access_key, secret_key=secret_key, secure=secure)
+        http_client = urllib3.PoolManager(num_pools=50, maxsize=50, retries=urllib3.Retry(total=3, backoff_factor=0.2))
+
+        self._minio_client = Minio(
+            endpoint, access_key=access_key, secret_key=secret_key, secure=secure, http_client=http_client
+        )
         self._bucket_name = bucket_name
 
     def select_one(self, action_id: int) -> Optional[Dict[str, Any]]:

@@ -21,3 +21,18 @@ AtUri: Entity[str] = Entity(
   type='AtUri',
   id=f'at://{_UserIdResolved}/{Path}',
 )
+
+Cid: str = JsonData(
+  path='$.operation.cid',
+)
+
+
+FacetLinkList: List[str] = LinksFromFacets()
+FacetLinkCount = ListLength(list=FacetLinkList)
+FacetLinkDomains = ExtractListDomains(list=FacetLinkList)
+
+FacetMentionList: List[str] = MentionsFromFacets()
+FacetMentionCount = ListLength(list=FacetMentionList)
+
+FacetTagList: List[str] = TagsFromFacets()
+FacetTagLength = ListLength(list=FacetTagList)

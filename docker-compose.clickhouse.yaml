@@ -3,6 +3,7 @@ volumes:
   router_var: {}
   minio_data: {}
   clickhouse_data: {}
+  redis_data: {}
 
 services:
   kafka:
@@ -130,6 +131,15 @@ services:
       - OSPREY_CLICKHOUSE_DB=default
       - OSPREY_CLICKHOUSE_TABLE=osprey_execution_results
       - OSPREY_CLICKHOUSE_BATCH_SIZE=500
+
+      - OSPREY_REDIS_SERVERS=["redis:6379"]
+      - OSPREY_REDIS_MODE=standalone
+      - OSPREY_REDIS_DB=0
+
+      - OSPREY_BLUESKY_IDENTIFIER=
+      - OSPREY_BLUESKY_PASSWORD=
+      - OSPREY_BLUESKY_PDS_URL=
+      - OSPREY_BLUESKY_LABELER_DID=
     volumes:
       - ./osprey_worker:/osprey/osprey_worker
       - ./osprey_rpc:/osprey/osprey_rpc
@@ -169,6 +179,11 @@ services:
       - OSPREY_CLICKHOUSE_PASSWORD=clickhouse
       - OSPREY_CLICKHOUSE_DB=default
       - OSPREY_CLICKHOUSE_TABLE=osprey_execution_results
+
+      - OSPREY_BLUESKY_IDENTIFIER=
+      - OSPREY_BLUESKY_PASSWORD=
+      - OSPREY_BLUESKY_PDS_URL=
+      - OSPREY_BLUESKY_LABELER_DID=
     volumes:
       - ./osprey_worker:/osprey/osprey_worker
       - ./osprey_rpc:/osprey/osprey_rpc
@@ -295,3 +310,18 @@ services:
       ATKAFKA_OSPREY_COMPATIBLE: "true"
       ATKAFKA_PLC_HOST: "https://plc.directory"
     restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    hostname: redis
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5

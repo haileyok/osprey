@@ -74,34 +74,34 @@ class ClickhouseExecutionResultsSink(BaseOutputSink):
             batch_to_flush = self._batch.copy()
             self._batch.clear()
 
-        # put all the column names into a set
         all_fields: Set[str] = set()
         for row in batch_to_flush:
             all_fields.update(row.keys())
 
-        # determine if there are new columns and if so, try to update the schema
         new_fields = all_fields - self._known_columns
         if new_fields:
             try:
                 with self._schema_lock:
-                    # check again after acquring lock incase another greenlet handled the update
                     new_fields = all_fields - self._known_columns
                     if new_fields:
                         self._add_columns(new_fields, batch_to_flush)
                         self._known_columns.update(new_fields)
             except Exception as e:
                 logger.error(f'Error updating the Clickhouse table schema: {e}')
-                # if there's a failure just re-add to the batch
-                # TODO: this should be a bit more resilient, i.e. this could infinitely grow in size if
-                # errors are persistent...
                 with self._batch_lock:
                     self._batch.extend(batch_to_flush)
                 raise
 
-        col_names = self._known_columns
-        data_rows: List[Any | None] = []
+        col_names: List[str] = sorted(self._known_columns)
+
+        data_rows: List[List[Any]] = []
         for row in batch_to_flush:
-            data_row = [row.get(col) for col in col_names]
+            data_row = []
+            for col in col_names:
+                val = row.get(col)
+                if val is None and col in self._array_columns:
+                    val = []
+                data_row.append(val)
             data_rows.append(data_row)
 
         try:
@@ -111,7 +111,6 @@ class ClickhouseExecutionResultsSink(BaseOutputSink):
             logger.info(f'Inserted {len(batch_to_flush)} rows into ClickHouse')
         except Exception as e:
             logger.error(f'Error flushing batch to Clickhouse: {e}')
-            # as above, re-add to the batch on failures. same TODO: as above too
             with self._batch_lock:
                 self._batch.extend(batch_to_flush)
             raise
@@ -120,9 +119,11 @@ class ClickhouseExecutionResultsSink(BaseOutputSink):
         """Get the current schema of the Clickhouse table"""
         try:
             result = self._ch_client.query(f'DESCRIBE TABLE {self._ch_database}.{self._ch_table}')
+            self._array_columns: Set[str] = {row[0] for row in result.result_rows if 'Array' in row[1]}
             return {row[0] for row in result.result_rows}
         except Exception as e:
             logger.warning(f'Could not get current schema: {e}')
+            self._array_columns = set()
             return set()
 
     def _add_columns(self, new_fields: Set[str], batch_sample: List[Dict[str, Any]]) -> None:
@@ -134,6 +135,9 @@ class ClickhouseExecutionResultsSink(BaseOutputSink):
         for field_name in new_fields:
             column_type = self._infer_column_type(field_name, batch_sample)
             alter_statements.append(f'ADD COLUMN IF NOT EXISTS `{field_name}` {column_type}')
+
+            if column_type.startswith('Array'):
+                self._array_columns.add(field_name)
 
         alter_query = f"""
             ALTER TABLE {self._ch_database}.{self._ch_table}

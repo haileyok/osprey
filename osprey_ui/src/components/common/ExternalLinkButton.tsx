@@ -19,7 +19,9 @@ const ExternalLinkButton = ({ entityType, entityId, className, icon = false }: E
   const externalLinks = useApplicationConfigStore((state) => state.externalLinks);
   const externalLink = externalLinks.get(entityType);
   if (externalLink == null) return null;
-  const externalLinkFormatted = externalLink.replace('{entity_id}', encodeURIComponent(entityId));
+  // const externalLinkFormatted = externalLink.replace('{entity_id}', encodeURIComponent(entityId));
+  // for atproto purposes, we are _not_ going to encode the uri component
+  const externalLinkFormatted = externalLink.replace('{entity_id}', entityId);
 
   if (icon) {
     return (
