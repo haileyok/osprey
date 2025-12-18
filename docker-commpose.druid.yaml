@@ -1,9 +1,13 @@
+# Volumes for druid purposes only
 volumes:
   metadata_data: {}
+  middle_var: {}
+  historical_var: {}
+  broker_var: {}
+  coordinator_var: {}
   router_var: {}
+  druid_shared: {}
   minio_data: {}
-  clickhouse_data: {}
-  redis_data: {}
 
 services:
   kafka:
@@ -90,12 +94,14 @@ services:
         condition: service_healthy
       kafka-topic-creator:
         condition: service_completed_successfully
+      bigtable:
+        condition: service_healthy
+      bigtable-initializer:
+        condition: service_completed_successfully
       minio:
         condition: service_healthy
       minio-bucket-init:
         condition: service_completed_successfully
-      clickhouse:
-        condition: service_healthy
     ports:
       - "5001:5000"
     command: ["osprey-worker"]
@@ -104,7 +110,7 @@ services:
       - PORT=5000
       - POSTGRES_HOSTS={"osprey_db":"postgresql://osprey:FoolishPassword@postgres:5432/osprey"}
       - OSPREY_INPUT_STREAM_SOURCE=kafka
-      - OSPREY_STDOUT_OUTPUT_SINK=False
+      - OSPREY_STDOUT_OUTPUT_SINK=True
       - OSPREY_KAFKA_BOOTSTRAP_SERVERS=["kafka:29092"]
       - OSPREY_KAFKA_INPUT_STREAM_TOPIC=osprey.actions_input
       # Client ID will default to the machine hostname if it isn't defined
@@ -115,6 +121,7 @@ services:
       - DD_TRACE_ENABLED=False
       - DD_DOGSTATSD_DISABLE=True
       - OSPREY_RULES_SINK_NUM_WORKERS=1
+      - BIGTABLE_EMULATOR_HOST=bigtable:8361
       - OSPREY_EXECUTION_RESULT_STORAGE_BACKEND=minio
       - OSPREY_MINIO_ENDPOINT=minio:9000
       - OSPREY_MINIO_ACCESS_KEY=minioadmin
@@ -123,23 +130,6 @@ services:
       - OSPREY_MINIO_EXECUTION_RESULTS_BUCKET=execution-output
       - SNOWFLAKE_API_ENDPOINT=http://snowflake-id-worker:8088
       - OSPREY_RULES_PATH=./example_rules
-
-      - OSPREY_CLICKHOUSE_HOST=clickhouse
-      - OSPREY_CLICKHOUSE_PORT=8123
-      - OSPREY_CLICKHOUSE_USER=default
-      - OSPREY_CLICKHOUSE_PASSWORD=clickhouse
-      - OSPREY_CLICKHOUSE_DB=default
-      - OSPREY_CLICKHOUSE_TABLE=osprey_execution_results
-      - OSPREY_CLICKHOUSE_BATCH_SIZE=500
-
-      - OSPREY_REDIS_SERVERS=["redis:6379"]
-      - OSPREY_REDIS_MODE=standalone
-      - OSPREY_REDIS_DB=0
-
-      - OSPREY_BLUESKY_IDENTIFIER=
-      - OSPREY_BLUESKY_PASSWORD=
-      - OSPREY_BLUESKY_PDS_URL=
-      - OSPREY_BLUESKY_LABELER_DID=
     volumes:
       - ./osprey_worker:/osprey/osprey_worker
       - ./osprey_rpc:/osprey/osprey_rpc
@@ -153,9 +143,11 @@ services:
       dockerfile: osprey_worker/Dockerfile
     depends_on:
       - osprey-worker
-      - clickhouse
+      - druid-broker
       - postgres
       - snowflake-id-worker
+      - bigtable
+      - bigtable-initializer
     ports:
       - "5004:5004"
     command: ["osprey-ui-api"]
@@ -165,25 +157,15 @@ services:
       - DEBUG=true
       - FLASK_DEBUG=1
       - FLASK_ENV=development
+      - DRUID_URL=http://druid-broker:8082
       - POSTGRES_HOSTS={"osprey_db":"postgresql://osprey:FoolishPassword@postgres:5432/osprey"}
       - DD_TRACE_ENABLED=False
       - DD_DOGSTATSD_DISABLE=True
       - OSPREY_RULES_PATH=/osprey/example_rules
       - OSPREY_DISABLE_VALIDATION_EXPORTER=true
+      - BIGTABLE_EMULATOR_HOST=bigtable:8361
       - SNOWFLAKE_API_ENDPOINT=http://snowflake-id-worker:8088
       - SNOWFLAKE_EPOCH=1420070400000
-
-      - OSPREY_CLICKHOUSE_HOST=clickhouse
-      - OSPREY_CLICKHOUSE_PORT=8123
-      - OSPREY_CLICKHOUSE_USER=default
-      - OSPREY_CLICKHOUSE_PASSWORD=clickhouse
-      - OSPREY_CLICKHOUSE_DB=default
-      - OSPREY_CLICKHOUSE_TABLE=osprey_execution_results
-
-      - OSPREY_BLUESKY_IDENTIFIER=
-      - OSPREY_BLUESKY_PASSWORD=
-      - OSPREY_BLUESKY_PDS_URL=
-      - OSPREY_BLUESKY_LABELER_DID=
     volumes:
       - ./osprey_worker:/osprey/osprey_worker
       - ./osprey_rpc:/osprey/osprey_rpc
@@ -218,6 +200,33 @@ services:
       - EPOCH=1420070400000
       - PORT=8088
     restart: unless-stopped
+
+  bigtable:
+    hostname: bigtable
+    container_name: bigtable
+    image: gcr.io/google.com/cloudsdktool/cloud-sdk:latest
+    ports:
+      - "8361:8361"
+    command: >
+      bash -c "
+        gcloud beta emulators bigtable start --host-port=0.0.0.0:8361 --project=osprey-dev
+      "
+    healthcheck:
+      test: ["CMD", "bash", "-c", "pgrep -f cbtemulator > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  bigtable-initializer:
+    container_name: bigtable-initializer
+    image: gcr.io/google.com/cloudsdktool/cloud-sdk:latest
+    depends_on:
+      bigtable:
+        condition: service_healthy
+    volumes:
+      - ./init-bigtable.sh:/init-bigtable.sh
+    command: ["/bin/bash", "/init-bigtable.sh"]
 
   # Optional test data generator - run with:
   # docker compose --profile test_data up kafka-test-data-producer -d
@@ -261,67 +270,110 @@ services:
       timeout: 10s
       retries: 5
 
-  clickhouse:
-    image: clickhouse/clickhouse-server:24.1
-    hostname: clickhouse
-    container_name: clickhouse
-    depends_on:
-      kafka:
-        condition: service_healthy
+  # DRUID, HERE BE DRAGONS
+  # Need 3.5 or later for container nodes
+  druid-zookeeper:
+    hostname: druid-zookeeper
+    container_name: druid-zookeeper
+    image: zookeeper:3.5.10
     ports:
-      - "8123:8123"
-      - "9009:9000"
-    volumes:
-      - clickhouse_data:/var/lib/clickhouse
+      - "2181:2181"
     environment:
-      CLICKHOUSE_DB: default
-      CLICKHOUSE_USER: default
-      CLICKHOUSE_PASSWORD: clickhouse
-    healthcheck:
-      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
+      - ZOO_MY_ID=1
 
-  clickhouse-init:
-    image: clickhouse/clickhouse-server:24.1
-    depends_on:
-      clickhouse:
-        condition: service_healthy
+  druid-coordinator:
+    image: apache/druid:34.0.0
+    hostname: druid-coordinator
+    container_name: druid-coordinator
     volumes:
-      - ./clickhouse-init/01-init.sql:/init.sql:ro
-    entrypoint: ["clickhouse-client", "--host", "clickhouse", "--password", "clickhouse", "--queries-file", "/init.sql"]
+      - druid_shared:/opt/shared
+      - coordinator_var:/opt/druid/var
+    depends_on:
+      - druid-zookeeper
+      - postgres
+    ports:
+      - "8081:8081"
+    command:
+      - coordinator
+    env_file:
+      - druid/environment
+
+  druid-broker:
+    image: apache/druid:34.0.0
+    container_name: druid-broker
+    hostname: druid-broker
+    volumes:
+      - broker_var:/opt/druid/var
+    depends_on:
+      - druid-zookeeper
+      - postgres
+      - druid-coordinator
+    ports:
+      - "8082:8082"
+    command:
+      - broker
+    env_file:
+      - druid/environment
+
+  druid-historical:
+    image: apache/druid:34.0.0
+    container_name: druid-historical
+    hostname: druid-historical
+    volumes:
+      - druid_shared:/opt/shared
+      - historical_var:/opt/druid/var
+    depends_on:
+      - druid-zookeeper
+      - postgres
+      - druid-coordinator
+    ports:
+      - "8083:8083"
+    command:
+      - historical
+    env_file:
+      - druid/environment
+
+  druid-middlemanager:
+    image: apache/druid:34.0.0
+    container_name: druid-middlemanager
+    hostname: druid-middlemanager
+    volumes:
+      - druid_shared:/opt/shared
+      - middle_var:/opt/druid/var
+    depends_on:
+      - druid-zookeeper
+      - postgres
+      - druid-coordinator
+    ports:
+      - "8091:8091"
+      - "8100-8105:8100-8105"
+    command:
+      - middleManager
+    env_file:
+      - druid/environment
+
+  druid-router:
+    image: apache/druid:34.0.0
+    container_name: druid-router
+    hostname: druid-router
+    volumes:
+      - router_var:/opt/druid/var
+    depends_on:
+      - druid-zookeeper
+      - postgres
+      - druid-coordinator
+    ports:
+      - "8888:8888"
+    command:
+      - router
+    env_file:
+      - druid/environment
+
+  druid-spec-submitter:
+    image: curlimages/curl:latest
+    depends_on:
+      - druid-coordinator
+    volumes:
+      - ./druid/specs:/specs
+    command: ["/bin/sh", "/specs/submit-specs.sh"]
     restart: "no"
-
-  at-kafka:
-    image: ghcr.io/haileyok/at-kafka:main-77d1562
-    depends_on:
-      kafka:
-        condition: service_healthy
-      clickhouse:
-        condition: service_healthy
-    container_name: atkafka
-    ports:
-      - "6010:6009"
-    environment:
-      ATKAFKA_RELAY_HOST: "wss://bsky.network"
-      ATKAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
-      ATKAFKA_OUTPUT_TOPIC: "osprey.actions_input"
-      ATKAFKA_OSPREY_COMPATIBLE: "true"
-      ATKAFKA_PLC_HOST: "https://plc.directory"
-    restart: unless-stopped
-
-  redis:
-    image: redis:7-alpine
-    hostname: redis
-    container_name: redis
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    command: redis-server --appendonly yes
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 5
