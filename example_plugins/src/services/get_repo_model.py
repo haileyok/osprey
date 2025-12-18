@@ -60,7 +60,7 @@ class SubjectStatus(BaseModel):
 
 
 class Moderation(BaseModel):
-    subject_status: SubjectStatus = Field(alias='subjectStatus')
+    subject_status: Optional[SubjectStatus] = Field(alias='subjectStatus')
 
 
 class LabelSignature(BaseModel):
