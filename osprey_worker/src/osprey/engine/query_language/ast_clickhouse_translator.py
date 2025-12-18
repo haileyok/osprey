@@ -92,7 +92,11 @@ class ClickhouseTranslator(BaseAstTranslator):
         name = self._get_next_param_name()
         self._params[name] = val
 
-        if isinstance(val, str):
+        # bools need to get cast to int64 for clickhouse
+        if isinstance(val, bool):
+            self._params[name] = 1 if val else 0
+            type_annotation = 'Int64'
+        elif isinstance(val, str):
             type_annotation = 'String'
         elif isinstance(val, int):
             type_annotation = 'Int64'
