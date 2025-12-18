@@ -1,6 +1,3 @@
-from typing import Any, Dict
-
-import requests
 from osprey.engine.executor.execution_context import ExecutionResult
 from osprey.worker.lib.config import Config
 from osprey.worker.lib.osprey_shared.logging import get_logger

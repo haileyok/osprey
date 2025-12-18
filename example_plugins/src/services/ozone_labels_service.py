@@ -16,11 +16,12 @@ logger = get_logger('ozone_labels_service')
 class OzoneLabelsService(LabelsServiceBase):
     def __init__(self, config: Config):
         super().__init__()
-
-        self._client = OzoneClient.get_instance(config=config)
+        try:
+            self._client = OzoneClient.get_instance(config=config)
+        except Exception as e:
+            logger.error(f'Error creating Ozone labels service: {e}')
 
     def initialize(self) -> None:
-        # TODO: setup session
         pass
 
     def read_labels(self, entity: EntityT[Any]) -> EntityLabels:

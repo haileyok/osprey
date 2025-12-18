@@ -1,9 +1,9 @@
 import threading
 from typing import Any, Dict, Optional
 
-from osprey.worker.lib.osprey_shared.labels import EntityLabels, LabelReasons, LabelState, LabelStatus
 import requests
 from osprey.worker.lib.config import Config
+from osprey.worker.lib.osprey_shared.labels import EntityLabels, LabelReasons, LabelState, LabelStatus
 from osprey.worker.lib.osprey_shared.logging import get_logger
 from services.get_repo_model import OzoneGetRepoResponse
 from services.ozone_session import OzoneSession
