@@ -41,7 +41,7 @@ class OzoneLabelsService(LabelsServiceBase):
         headers = self._session.get_headers_with_moderation()
 
         try:
-            response = requests.post(
+            response = requests.get(
                 f'{self._session.get_pds_url()}/xrpc/tools.ozone.moderation.getRepo',
                 headers=headers,
                 params=params,
