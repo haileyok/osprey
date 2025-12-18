@@ -1,4 +1,5 @@
 from typing import Any, Dict, Generator
+from urllib.parse import unquote
 
 import requests
 from osprey.engine.language_types.entities import EntityT
@@ -24,6 +25,9 @@ class OzoneLabelsService(LabelsServiceBase):
 
     def read_labels(self, entity: EntityT[Any]) -> EntityLabels:
         entity_key = str(entity.id)
+        entity_key = unquote(entity_key)
+
+        logger.info(f'getting labels for {entity_key}')
 
         if not entity_key.startswith('did:'):
             return create_empty_entity_labels()
