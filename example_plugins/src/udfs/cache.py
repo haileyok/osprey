@@ -277,6 +277,8 @@ class CacheGetFloatArguments(CacheArgumentsBase):
 
 
 class CacheSetStr(UDFBase[CacheSetStrArguments, None]):
+    execute_async = True
+
     def execute(self, execution_context: ExecutionContext, arguments: CacheSetStrArguments):
         if all(arguments.when_all) is not True:
             return
@@ -284,6 +286,8 @@ class CacheSetStr(UDFBase[CacheSetStrArguments, None]):
 
 
 class CacheSetInt(UDFBase[CacheSetIntArguments, None]):
+    execute_async = True
+
     def execute(self, execution_context: ExecutionContext, arguments: CacheSetIntArguments):
         if all(arguments.when_all) is not True:
             return
@@ -291,6 +295,8 @@ class CacheSetInt(UDFBase[CacheSetIntArguments, None]):
 
 
 class CacheSetFloat(UDFBase[CacheSetFloatArguments, None]):
+    execute_async = True
+
     def execute(self, execution_context: ExecutionContext, arguments: CacheSetFloatArguments):
         if all(arguments.when_all) is not True:
             return
@@ -298,6 +304,8 @@ class CacheSetFloat(UDFBase[CacheSetFloatArguments, None]):
 
 
 class CacheGetStr(UDFBase[CacheGetStrArguments, str]):
+    execute_async = True
+
     def execute(self, execution_context: ExecutionContext, arguments: CacheGetStrArguments) -> str:
         if all(arguments.when_all) is not True:
             return arguments.default
@@ -305,6 +313,8 @@ class CacheGetStr(UDFBase[CacheGetStrArguments, str]):
 
 
 class CacheGetInt(UDFBase[CacheGetIntArguments, int]):
+    execute_async = True
+
     def execute(self, execution_context: ExecutionContext, arguments: CacheGetIntArguments) -> int:
         if all(arguments.when_all) is not True:
             return arguments.default
@@ -312,6 +322,8 @@ class CacheGetInt(UDFBase[CacheGetIntArguments, int]):
 
 
 class CacheGetFloat(UDFBase[CacheGetFloatArguments, float]):
+    execute_async = True
+
     def execute(self, execution_context: ExecutionContext, arguments: CacheGetFloatArguments) -> float:
         if all(arguments.when_all) is not True:
             return arguments.default
@@ -319,6 +331,8 @@ class CacheGetFloat(UDFBase[CacheGetFloatArguments, float]):
 
 
 class IncrementWindow(UDFBase[IncrementWindowArguments, int]):
+    execute_async = True
+
     def execute(self, execution_context: ExecutionContext, arguments: IncrementWindowArguments) -> int:
         if all(arguments.when_all) is False:
             return 0
@@ -326,6 +340,8 @@ class IncrementWindow(UDFBase[IncrementWindowArguments, int]):
 
 
 class GetWindowCount(UDFBase[CacheWindowArgumentsBase, int]):
+    execute_async = True
+
     def execute(self, execution_context: ExecutionContext, arguments: CacheWindowArgumentsBase) -> int:
         if all(arguments.when_all) is False:
             return 0
