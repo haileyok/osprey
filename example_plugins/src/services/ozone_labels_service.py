@@ -1,15 +1,15 @@
-import logging
 from typing import Any, Dict, Generator
 
 import requests
 from osprey.engine.language_types.entities import EntityT
 from osprey.worker.lib.config import Config
 from osprey.worker.lib.osprey_shared.labels import EntityLabels, LabelReasons, LabelState, LabelStatus
+from osprey.worker.lib.osprey_shared.logging import get_logger
 from osprey.worker.lib.storage.labels import LabelsServiceBase
 from services.atproto import OzoneSession
 from services.get_repo_model import OzoneGetRepoResponse
 
-logger = logging.getLogger('ozone_labels_service')
+logger = get_logger('ozone_labels_service')
 
 
 class OzoneLabelsService(LabelsServiceBase):

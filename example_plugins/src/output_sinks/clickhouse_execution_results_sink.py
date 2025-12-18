@@ -1,4 +1,3 @@
-import logging
 from datetime import datetime
 from typing import Any, Dict, List, Set
 
@@ -7,9 +6,10 @@ from clickhouse_connect.driver.client import Client
 from gevent.lock import RLock
 from osprey.engine.executor.execution_context import ExecutionResult
 from osprey.worker.lib.config import Config
+from osprey.worker.lib.osprey_shared.logging import get_logger
 from osprey.worker.sinks.sink.output_sink import BaseOutputSink
 
-logger = logging.getLogger('clickhouse_execution_results_sink')
+logger = get_logger('clickhouse_execution_results_sink')
 
 # define a batch size, this should likely be configurable or even adjusted automatically based on
 # rate of events

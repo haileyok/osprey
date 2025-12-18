@@ -1,14 +1,14 @@
-import logging
 from typing import Any, Dict
 
 import requests
 from osprey.engine.executor.execution_context import ExecutionResult
 from osprey.worker.lib.config import Config
+from osprey.worker.lib.osprey_shared.logging import get_logger
 from osprey.worker.sinks.sink.output_sink import BaseOutputSink
 from services.atproto import OzoneSession
 from udfs.atproto.label import AtprotoLabelEffect
 
-logger = logging.getLogger('ozone_label_sink')
+logger = get_logger('ozone_label_sink')
 
 
 class OzoneLabelSink(BaseOutputSink):
