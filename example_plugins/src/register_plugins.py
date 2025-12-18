@@ -7,7 +7,7 @@ from osprey.worker.lib.storage.labels import LabelsServiceBase
 from osprey.worker.sinks.sink.output_sink import BaseOutputSink
 from output_sinks.clickhouse_execution_results_sink import ClickhouseExecutionResultsSink
 from output_sinks.ozone_label_sink import OzoneLabelSink
-from services.labels_service import PostgresLabelsService
+from services.ozone_labels_service import OzoneLabelsService
 from udfs.atproto.diduri import DidFromUri
 from udfs.atproto.facets import LinksFromFacets, MentionsFromFacets, TagsFromFacets
 from udfs.atproto.label import AtprotoLabel
@@ -84,4 +84,4 @@ def register_output_sinks(config: Config) -> Sequence[BaseOutputSink]:
 @hookimpl_osprey
 def register_labels_service_or_provider(config: Config) -> LabelsServiceBase:
     """Register a PostgreSQL-backed labels service."""
-    return PostgresLabelsService()
+    return OzoneLabelsService(config=config)
