@@ -1,12 +1,12 @@
-import logging
 import threading
 from datetime import datetime, timedelta
 from typing import Optional
 
 import requests
 from osprey.worker.lib.config import Config
+from osprey.worker.lib.osprey_shared.logging import get_logger
 
-logger = logging.getLogger('ozone_session')
+logger = get_logger('ozone_session')
 
 
 class OzoneSession:

@@ -1,74 +1,77 @@
-import logging
+import copy
+from contextlib import contextmanager
 from typing import Any, Dict, Generator
+from urllib.parse import unquote
 
-import requests
 from osprey.engine.language_types.entities import EntityT
 from osprey.worker.lib.config import Config
-from osprey.worker.lib.osprey_shared.labels import EntityLabels, LabelReasons, LabelState, LabelStatus
+from osprey.worker.lib.osprey_shared.labels import EntityLabels, LabelState
+from osprey.worker.lib.osprey_shared.logging import get_logger
 from osprey.worker.lib.storage.labels import LabelsServiceBase
-from services.atproto import OzoneSession
-from services.get_repo_model import OzoneGetRepoResponse
+from services.ozone_client import OzoneClient
 
-logger = logging.getLogger('ozone_labels_service')
+logger = get_logger('ozone_labels_service')
 
 
 class OzoneLabelsService(LabelsServiceBase):
     def __init__(self, config: Config):
         super().__init__()
 
-        self._session = OzoneSession.get_instance(config=config)
+        self._client = OzoneClient.get_instance(config=config)
 
     def initialize(self) -> None:
         # TODO: setup session
         pass
 
     def read_labels(self, entity: EntityT[Any]) -> EntityLabels:
+        """Get labels from the configured Ozone instance"""
         entity_key = str(entity.id)
+        entity_key = unquote(entity_key)
 
+        # TODO: support other stuff
         if not entity_key.startswith('did:'):
             return create_empty_entity_labels()
 
-        return self._get_did_labels(entity_key)
+        return self._client.get_did_labels(did=entity_key)
 
-    def read_modify_write_labels_atomically(self) -> Generator[EntityLabels, None, None]:
-        raise NotImplementedError()
+    @contextmanager
+    def read_modify_write_labels_atomically(self, entity: EntityT[Any]) -> Generator[EntityLabels, None, None]:
+        """Update an entity's labels in Ozone."""
 
-    def _get_did_labels(self, did: str) -> EntityLabels:
-        params: Dict[str, Any] = {
-            'did': did,
-        }
+        entity_key = str(entity.id)
+        entity_key = unquote(entity_key)
 
-        headers = self._session.get_headers_with_moderation()
+        # TODO: support other stuff
+        if not entity_key.startswith('did:'):
+            labels = create_empty_entity_labels()
+            yield labels
+            return
+
+        labels = self._client.get_did_labels(did=entity_key)
+
+        # because labels gets updated in-place, we want to store a copy of the old labels
+        # so that we only add/remove the needed labels in ozone
+        old_labels = copy.deepcopy(labels)
 
         try:
-            response = requests.post(
-                f'{self._session.get_pds_url()}/xrpc/tools.ozone.moderation.getRepo',
-                headers=headers,
-                params=params,
+            yield labels
+        except Exception:
+            raise
+
+        for val in old_labels.labels:
+            if val not in labels.labels:
+                self._client.add_or_remove_label(action_id=0, entity_id=entity_key, label=val, neg=True)
+
+        for val in labels.labels:
+            if val in old_labels.labels:
+                continue
+
+            self._client.add_or_remove_label(
+                action_id=0,
+                entity_id=entity_key,
+                label=val,
+                neg=False,
             )
-            response.raise_for_status()
-        except Exception as e:
-            logger.error(f'Failed to get repo for {did}: {e}')
-            raise e
-
-        try:
-            repo = OzoneGetRepoResponse.parse_obj(response.json())
-        except Exception as e:
-            logger.error(f'Failed to parse response JSON: {e}')
-            raise e
-
-        if not repo.labels:
-            return create_empty_entity_labels()
-
-        labels: Dict[str, LabelState] = {}
-
-        if repo.labels:
-            for label in repo.labels:
-                if not label.neg:
-                    continue
-                labels[label.val] = LabelState(status=LabelStatus.ADDED, reasons=LabelReasons())
-
-        return EntityLabels(labels=labels)
 
 
 def create_empty_entity_labels():
