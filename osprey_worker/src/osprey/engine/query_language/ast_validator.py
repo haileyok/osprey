@@ -6,6 +6,16 @@ from osprey.engine.ast.error_utils import SpanWithHint
 from osprey.engine.ast.grammar import BinaryComparison, BooleanOperation, Call, Not, UnaryOperation
 from osprey.engine.ast_validator.base_validator import SourceValidator
 from osprey.engine.ast_validator.validator_registry import ValidatorRegistry
+from osprey.engine.ast_validator.validators.feature_name_to_entity_type_mapping import FeatureNameToEntityTypeMapping
+from osprey.engine.ast_validator.validators.imports_must_not_have_cycles import ImportsMustNotHaveCycles
+from osprey.engine.ast_validator.validators.unique_stored_names import UniqueStoredNames
+from osprey.engine.ast_validator.validators.validate_call_kwargs import ValidateCallKwargs
+from osprey.engine.ast_validator.validators.validate_dynamic_calls_have_annotated_rvalue import (
+    ValidateDynamicCallsHaveAnnotatedRValue,
+)
+from osprey.engine.ast_validator.validators.validate_experiments import ValidateExperiments
+from osprey.engine.ast_validator.validators.validate_static_types import ValidateStaticTypes
+from osprey.engine.ast_validator.validators.variables_must_be_defined import VariablesMustBeDefined
 
 if TYPE_CHECKING:
     from osprey.engine.ast_validator.validation_context import ValidationContext
@@ -21,6 +31,14 @@ REGISTRY = ValidatorRegistry.from_validator_classes(
     }
 )
 
+REGISTRY.register(UniqueStoredNames)
+REGISTRY.register(ImportsMustNotHaveCycles)
+REGISTRY.register(VariablesMustBeDefined)
+REGISTRY.register(ValidateCallKwargs)
+REGISTRY.register(ValidateDynamicCallsHaveAnnotatedRValue)
+REGISTRY.register(FeatureNameToEntityTypeMapping)
+REGISTRY.register(ValidateExperiments)
+REGISTRY.register(ValidateStaticTypes)
 
 ALLOWED_NODES = (
     grammar.Annotation,
