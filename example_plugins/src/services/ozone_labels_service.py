@@ -68,7 +68,7 @@ class OzoneLabelsService(LabelsServiceBase):
 
         if repo.labels:
             for label in repo.labels:
-                if not label.neg:
+                if hasattr(label, 'neg') and label.neg:
                     continue
                 labels[label.val] = LabelState(status=LabelStatus.ADDED, reasons=LabelReasons())
 
