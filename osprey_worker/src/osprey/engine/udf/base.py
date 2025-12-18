@@ -260,6 +260,10 @@ class QueryUdfBase(Generic[Arguments, RValue], UDFBase[Arguments, RValue]):
     def to_druid_query(self) -> Dict[str, object]:
         raise NotImplementedError
 
+    @abstractmethod
+    def to_clickhouse_query(self) -> str:
+        raise NotImplementedError
+
 
 class InvalidDynamicReturnType(Exception):
     def __init__(self, udf: UDFBase[Any, Any], expected_type: type, actual_type: type) -> None:

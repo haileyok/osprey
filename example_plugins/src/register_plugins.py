@@ -32,6 +32,7 @@ from udfs.list import (
     RegexListMatch,
     SimpleListContains,
 )
+from udfs.query_udfs.regex import Regex
 from udfs.string import ExtractDomains, ExtractEmoji, ExtractListDomains, ForceString, StringContains, SubstrCount
 from udfs.tokenize import Tokenize
 
@@ -71,6 +72,8 @@ def register_udfs() -> Sequence[Type[UDFBase[Any, Any]]]:
         DidFromUri,
         ConcatStringLists,
         AtprotoLabel,
+        # Query UDFs
+        Regex,
     ]
 
 

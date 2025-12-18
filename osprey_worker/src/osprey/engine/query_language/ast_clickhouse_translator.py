@@ -6,6 +6,7 @@ from osprey.engine.ast_validator.validation_context import ValidatedSources
 from osprey.engine.ast_validator.validators.validate_call_kwargs import ValidateCallKwargs
 from osprey.engine.ast_validator.validators.validate_static_types import ValidateStaticTypes
 from osprey.engine.query_language.ast_druid_translator import get_comparison_dimension, get_comparison_value
+from osprey.engine.udf.base import QueryUdfBase
 from osprey.worker.ui_api.osprey.singletons import CLICKHOUSE
 
 
@@ -207,8 +208,12 @@ class ClickhouseTranslator(BaseAstTranslator):
         else:
             raise ClickhouseTransformException(node, 'Unknown Unary Operator')
 
-    # TODO: actually implement this
     def transform_Call(self, node: grammar.Call) -> str:
         """Transform various function calls into SQL where. Requires UDFs implement to_clickhouse_query()"""
 
-        raise ClickhouseTransformException(node, 'Unimplemented Call')
+        udf, _ = self._udf_node_mapping[id(node)]
+
+        if not isinstance(udf, QueryUdfBase):
+            raise ClickhouseTransformException(node, f'UDF {udf.__class__.__name__} is not QueryUdfBase')
+
+        return udf.to_clickhouse_query()
