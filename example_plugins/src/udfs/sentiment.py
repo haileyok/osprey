@@ -145,6 +145,7 @@ class AnalyzeSentiment(UDFBase[AnalyzeSentimentArguments, None]):
             return
 
         features_start = time()
+        logger.info(f'==> About to call add_custom_extracted_features')
         execution_context.add_custom_extracted_features(
             custom_extracted_features=[
                 VeryNegativeSentimentScoreCAF(score=json['very_negative']),
@@ -154,6 +155,7 @@ class AnalyzeSentiment(UDFBase[AnalyzeSentimentArguments, None]):
                 VeryPositiveSentimentScoreCAF(score=json['very_positive']),
             ]
         )
+        logger.info(f'==> Returned from add_custom_extracted_features')
         features_duration = (time() - features_start) * 1000
         logger.info(f'==> add_custom_extracted_features took {features_duration:.1f}ms')
 
