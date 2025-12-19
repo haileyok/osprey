@@ -11,7 +11,7 @@ from osprey.worker.lib.config import Config
 from osprey.worker.lib.osprey_shared.logging import get_logger
 from osprey.worker.sinks.sink.output_sink import BaseOutputSink
 
-logger = get_logger('clickhouse_execution_results_sink')
+logger = get_logger('clickhouse_execution_results_sink', dynamic_log_sampler=None)
 
 DEFAULT_BATCH_SIZE = 1000
 DEFAULT_FLUSH_INTERVAL_SECONDS = 1.0
