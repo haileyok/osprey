@@ -57,7 +57,7 @@ class NeutralSentimentScoreCAF(CustomExtractedFeature[float]):
 
     @classmethod
     def feature_name(cls) -> str:
-        return 'negative_sentiment_score'
+        return 'neutral_sentiment_score'  # Fixed: was 'negative_sentiment_score'
 
     def get_serializable_feature(self) -> float | None:
         return self.score
