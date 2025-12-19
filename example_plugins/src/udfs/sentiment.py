@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from time import time
 from typing import List, Optional
 
 import requests
@@ -7,15 +8,14 @@ from osprey.engine.executor.custom_extracted_features import CustomExtractedFeat
 from osprey.engine.executor.execution_context import ExecutionContext
 from osprey.engine.udf.arguments import ArgumentsBase
 from osprey.engine.udf.base import UDFBase
+from osprey.worker.lib.osprey_shared.logging import get_logger
 from osprey.worker.lib.singletons import CONFIG
+
+logger = get_logger('sentiment_udf')
 
 # Create a session with a larger connection pool for async requests
 _sentiment_session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(
-    pool_connections=100,
-    pool_maxsize=100,
-    max_retries=3
-)
+adapter = requests.adapters.HTTPAdapter(pool_connections=100, pool_maxsize=100, max_retries=1)
 _sentiment_session.mount('http://', adapter)
 _sentiment_session.mount('https://', adapter)
 
@@ -101,6 +101,8 @@ class AnalyzeSentiment(UDFBase[AnalyzeSentimentArguments, None]):
             pass
 
     def execute(self, execution_context: ExecutionContext, arguments: AnalyzeSentimentArguments) -> None:
+        start_time = time()
+
         if not self.analyze_endpoint:
             return
 
@@ -111,8 +113,10 @@ class AnalyzeSentiment(UDFBase[AnalyzeSentimentArguments, None]):
             if not v:
                 return
 
+        http_start = time()
         response = _sentiment_session.post(self.analyze_endpoint, json={'text': arguments.text})
         response.raise_for_status()
+        http_duration = (time() - http_start) * 1000  # Convert to ms
 
         json = response.json()
 
@@ -128,6 +132,9 @@ class AnalyzeSentiment(UDFBase[AnalyzeSentimentArguments, None]):
                 VeryPositiveSentimentScoreCAF(score=json['very_positive']),
             ]
         )
+
+        total_duration = (time() - start_time) * 1000  # Convert to ms
+        logger.info(f'Sentiment analysis: http={http_duration:.1f}ms total={total_duration:.1f}ms')
 
 
 class VeryNegativeSentimentScore(UDFBase[ArgumentsBase, Optional[float]]):

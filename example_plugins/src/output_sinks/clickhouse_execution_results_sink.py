@@ -1,7 +1,9 @@
 from datetime import datetime
+from time import time
 from typing import Any, Dict, List, Set
 
 import clickhouse_connect
+import gevent
 from clickhouse_connect.driver.client import Client
 from gevent.lock import RLock
 from osprey.engine.executor.execution_context import ExecutionResult
@@ -11,9 +13,8 @@ from osprey.worker.sinks.sink.output_sink import BaseOutputSink
 
 logger = get_logger('clickhouse_execution_results_sink')
 
-# define a batch size, this should likely be configurable or even adjusted automatically based on
-# rate of events
 DEFAULT_BATCH_SIZE = 1000
+DEFAULT_FLUSH_INTERVAL_SECONDS = 1.0
 
 
 class ClickhouseExecutionResultsSink(BaseOutputSink):
@@ -29,10 +30,12 @@ class ClickhouseExecutionResultsSink(BaseOutputSink):
         # peak throughput rate, since clickhouse does get upset if you attempt to insert too small of batches
         # at too fast of a rate. note that batch sizes may be considerably large.
         ch_batch_size = config.get_int('OSPREY_CLICKHOUSE_BATCH_SIZE', DEFAULT_BATCH_SIZE)
+        ch_flush_interval = config.get_float('OSPREY_CLICKHOUSE_FLUSH_INTERVAL', DEFAULT_FLUSH_INTERVAL_SECONDS)
 
         self._ch_database = ch_db
         self._ch_table = ch_table
         self._ch_batch_size = ch_batch_size
+        self._ch_flush_interval = ch_flush_interval
 
         self._ch_client: Client = clickhouse_connect.get_client(
             host=ch_host,
@@ -44,26 +47,53 @@ class ClickhouseExecutionResultsSink(BaseOutputSink):
         self._batch: List[Dict[str, Any]] = []
         self._batch_lock = RLock()
         self._schema_lock = RLock()
+        self._last_flush_time = time()
+        self._flush_greenlet = None
+        self._stopping = False
 
         self._known_columns: Set[str] = self._get_schema()
         logger.info(f'Initialized Clickhouse sink with {len(self._known_columns)} known columns in the schema')
+
+        self._flush_greenlet = gevent.spawn(self._periodic_flush)
 
     def will_do_work(self, result: ExecutionResult) -> bool:
         return True
 
     def push(self, result: ExecutionResult) -> None:
         """Add result to batch and insert when batch is full"""
+        push_start = time()
+
         row: Dict[str, Any] = {}
         row.update(result.extracted_features)
 
         should_flush = False
         with self._batch_lock:
             self._batch.append(row)
-            if len(self._batch) >= self._ch_batch_size:
+            batch_size = len(self._batch)
+            if batch_size >= self._ch_batch_size:
                 should_flush = True
+
+        push_duration = (time() - push_start) * 1000
+        logger.debug(f'ClickHouse push: {push_duration:.1f}ms (batch_size={batch_size}, will_flush={should_flush})')
 
         if should_flush:
             self._flush_batch()
+
+    def _periodic_flush(self) -> None:
+        """Background greenlet that flushes batches periodically"""
+        while not self._stopping:
+            gevent.sleep(self._ch_flush_interval)
+            current_time = time()
+
+            with self._batch_lock:
+                has_data = len(self._batch) > 0
+                time_elapsed = current_time - self._last_flush_time
+
+            if has_data and time_elapsed >= self._ch_flush_interval:
+                try:
+                    self._flush_batch()
+                except Exception as e:
+                    logger.error(f'Error in periodic flush: {e}')
 
     def _flush_batch(self) -> None:
         """Insert the current batch into Clickhouse"""
@@ -73,6 +103,7 @@ class ClickhouseExecutionResultsSink(BaseOutputSink):
 
             batch_to_flush = self._batch.copy()
             self._batch.clear()
+            self._last_flush_time = time()
 
         all_fields: Set[str] = set()
         for row in batch_to_flush:
@@ -105,10 +136,12 @@ class ClickhouseExecutionResultsSink(BaseOutputSink):
             data_rows.append(data_row)
 
         try:
+            insert_start = time()
             self._ch_client.insert(
                 table=f'{self._ch_database}.{self._ch_table}', data=data_rows, column_names=col_names
             )
-            logger.info(f'Inserted {len(batch_to_flush)} rows into ClickHouse')
+            insert_duration = (time() - insert_start) * 1000
+            logger.info(f'Inserted {len(batch_to_flush)} rows into ClickHouse in {insert_duration:.1f}ms')
         except Exception as e:
             logger.error(f'Error flushing batch to Clickhouse: {e}')
             with self._batch_lock:
@@ -178,4 +211,7 @@ class ClickhouseExecutionResultsSink(BaseOutputSink):
     def stop(self) -> None:
         """Flush any remaining data on shutdown"""
         logger.info('Stopping Clickhouse sink, flushing remaining batch...')
+        self._stopping = True
+        if self._flush_greenlet:
+            self._flush_greenlet.kill()
         self._flush_batch()
