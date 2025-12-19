@@ -47,7 +47,7 @@ from .sources_provider import BaseSourcesProvider, EtcdSourcesProvider, StaticSo
 log = logging.getLogger(__name__)
 
 
-_DEFAULT_MAX_ASYNC_PER_EXECUTION = 12
+_DEFAULT_MAX_ASYNC_PER_EXECUTION = 250
 
 
 _ModelT = TypeVar('_ModelT', bound=BaseModel)

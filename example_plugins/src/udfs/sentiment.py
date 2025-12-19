@@ -9,6 +9,16 @@ from osprey.engine.udf.arguments import ArgumentsBase
 from osprey.engine.udf.base import UDFBase
 from osprey.worker.lib.singletons import CONFIG
 
+# Create a session with a larger connection pool for async requests
+_sentiment_session = requests.Session()
+adapter = requests.adapters.HTTPAdapter(
+    pool_connections=100,
+    pool_maxsize=100,
+    max_retries=3
+)
+_sentiment_session.mount('http://', adapter)
+_sentiment_session.mount('https://', adapter)
+
 
 class AnalyzeSentimentArguments(ArgumentsBase):
     text: str
@@ -101,7 +111,7 @@ class AnalyzeSentiment(UDFBase[AnalyzeSentimentArguments, None]):
             if not v:
                 return
 
-        response = requests.post(self.analyze_endpoint, json={'text': arguments.text})
+        response = _sentiment_session.post(self.analyze_endpoint, json={'text': arguments.text})
         response.raise_for_status()
 
         json = response.json()
@@ -122,7 +132,7 @@ class AnalyzeSentiment(UDFBase[AnalyzeSentimentArguments, None]):
 
 class VeryNegativeSentimentScore(UDFBase[ArgumentsBase, Optional[float]]):
     def execute(self, execution_context: ExecutionContext, arguments: ArgumentsBase) -> Optional[float]:
-        score = execution_context.get_extracted_features().get('very_negative_sentiment_score')
+        score = execution_context.get_extracted_features().get('__very_negative_sentiment_score')
         if not isinstance(score, float):
             return None
         return score
@@ -130,7 +140,7 @@ class VeryNegativeSentimentScore(UDFBase[ArgumentsBase, Optional[float]]):
 
 class NegativeSentimentScore(UDFBase[ArgumentsBase, Optional[float]]):
     def execute(self, execution_context: ExecutionContext, arguments: ArgumentsBase) -> Optional[float]:
-        score = execution_context.get_extracted_features().get('negative_sentiment_score')
+        score = execution_context.get_extracted_features().get('__negative_sentiment_score')
         if not isinstance(score, float):
             return None
         return score
