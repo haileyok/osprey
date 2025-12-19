@@ -96,6 +96,10 @@ class AnalyzeSentiment(UDFBase[AnalyzeSentimentArguments, None]):
             pass
 
     def execute(self, execution_context: ExecutionContext, arguments: AnalyzeSentimentArguments) -> None:
+        # DEBUG: Check if gevent is actually patched
+        import socket
+        logger.info(f'socket module: {socket.socket.__module__}')
+
         if not self.analyze_endpoint:
             return
 
