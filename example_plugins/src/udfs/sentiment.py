@@ -84,9 +84,11 @@ class AnalyzeSentiment(UDFBase[AnalyzeSentimentArguments, None]):
     def __init__(self, validation_context: 'ValidationContext', arguments: AnalyzeSentimentArguments):
         super().__init__(validation_context, arguments)
 
-        config = CONFIG.instance()
-
-        self.analyze_endpoint = config.get_optional_str('OSPREY_SENTIMENT_ENDPOINT')
+        try:
+            config = CONFIG.instance()
+            self.analyze_endpoint = config.get_optional_str('OSPREY_SENTIMENT_ENDPOINT')
+        except Exception:
+            pass
 
     def execute(self, execution_context: ExecutionContext, arguments: AnalyzeSentimentArguments) -> None:
         if not self.analyze_endpoint:
