@@ -102,25 +102,43 @@ class AnalyzeSentiment(UDFBase[AnalyzeSentimentArguments, None]):
 
     def execute(self, execution_context: ExecutionContext, arguments: AnalyzeSentimentArguments) -> None:
         start_time = time()
+        logger.info(f'==> Sentiment analysis STARTED')
 
         if not self.analyze_endpoint:
+            logger.info('==> No analyze_endpoint, skipping')
             return
 
         if not arguments.text:
+            logger.info('==> No text, skipping')
             return
 
         for v in arguments.when_all:
             if not v:
+                logger.info('==> when_all failed, skipping')
                 return
 
+        logger.info(f'==> Making HTTP POST to {self.analyze_endpoint}')
         http_start = time()
-        response = _sentiment_session.post(self.analyze_endpoint, json={'text': arguments.text})
-        response.raise_for_status()
-        http_duration = (time() - http_start) * 1000  # Convert to ms
+
+        try:
+            response = _sentiment_session.post(
+                self.analyze_endpoint,
+                json={'text': arguments.text},
+                timeout=5.0
+            )
+            logger.info(f'==> Got HTTP response, status={response.status_code}')
+            response.raise_for_status()
+        except Exception as e:
+            logger.error(f'==> HTTP request failed: {e}')
+            raise
+
+        http_duration = (time() - http_start) * 1000
+        logger.info(f'==> HTTP completed in {http_duration:.1f}ms')
 
         json = response.json()
 
         if not isinstance(json, dict):
+            logger.warning(f'==> Response not dict: {type(json)}')
             return
 
         execution_context.add_custom_extracted_features(
@@ -133,8 +151,8 @@ class AnalyzeSentiment(UDFBase[AnalyzeSentimentArguments, None]):
             ]
         )
 
-        total_duration = (time() - start_time) * 1000  # Convert to ms
-        logger.info(f'Sentiment analysis: http={http_duration:.1f}ms total={total_duration:.1f}ms')
+        total_duration = (time() - start_time) * 1000
+        logger.info(f'==> Sentiment COMPLETED: http={http_duration:.1f}ms total={total_duration:.1f}ms')
 
 
 class VeryNegativeSentimentScore(UDFBase[ArgumentsBase, Optional[float]]):
