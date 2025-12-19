@@ -735,12 +735,14 @@ name = "example-plugins"
 version = "0.1.0"
 source = { editable = "example_plugins" }
 dependencies = [
+    { name = "grequests" },
     { name = "pluggy" },
     { name = "redis" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "grequests", specifier = ">=0.7.0" },
     { name = "pluggy", specifier = "==1.5.0" },
     { name = "redis", specifier = ">=7.1.0" },
 ]
@@ -1130,6 +1132,19 @@ wheels = [
 name = "greenlet"
 version = "3.0.4.dev0"
 source = { git = "https://github.com/discord/greenlet.git?rev=a75d78f1547c74a81134644a179467525a255466#a75d78f1547c74a81134644a179467525a255466" }
+
+[[package]]
+name = "grequests"
+version = "0.7.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "gevent" },
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/8a/6a/95616ce27c8b7c58f7dd0e5eba61ac873ecaae082d73e515904803fe73e7/grequests-0.7.0.tar.gz", hash = "sha256:5c33f14268df5b8fa1107d8537815be6febbad6ec560524d6a404b7778cf6ba6", size = 6524, upload-time = "2023-06-08T00:04:29.222Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1c/6a/bb015faedfb65ed728d7ccf15888e82ab46f980430d3c506fb3824388d1d/grequests-0.7.0-py2.py3-none-any.whl", hash = "sha256:4733edfcece027de25ae8eff86a87f563d7e829fdacbf3ce8b3aeea507694287", size = 5687, upload-time = "2023-06-08T00:04:27.669Z" },
+]
 
 [[package]]
 name = "grpc-google-iam-v1"

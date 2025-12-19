@@ -108,15 +108,17 @@ class AnalyzeSentiment(UDFBase[AnalyzeSentimentArguments, None]):
             if not v:
                 return
 
-        # HTTP libraries don't always yield properly with gevent, so run in threadpool
-        def _do_http_request():
-            response = requests.post(self.analyze_endpoint, json={'text': arguments.text}, timeout=5.0)
-            response.raise_for_status()
-            return response.json()
+        # Use grequests which properly integrates with gevent
+        import grequests
 
         try:
-            # Run in thread pool so it doesn't block greenlets
-            json = _http_threadpool.spawn(_do_http_request).get()
+            # grequests properly yields during HTTP calls
+            request = grequests.post(self.analyze_endpoint, json={'text': arguments.text}, timeout=5.0)
+            response = grequests.map([request])[0]
+            if response is None:
+                raise Exception("HTTP request failed - no response")
+            response.raise_for_status()
+            json = response.json()
         except Exception as e:
             logger.error(f'HTTP request failed: {e}')
             raise
