@@ -14,6 +14,10 @@ from osprey.worker.lib.singletons import CONFIG
 
 logger = get_logger('sentiment_udf', dynamic_log_sampler=None)
 
+# Shared thread pool for HTTP requests (urllib doesn't yield properly in gevent)
+import gevent.threadpool
+_http_threadpool = gevent.threadpool.ThreadPool(maxsize=100)
+
 
 class AnalyzeSentimentArguments(ArgumentsBase):
     text: str
@@ -110,12 +114,20 @@ class AnalyzeSentiment(UDFBase[AnalyzeSentimentArguments, None]):
             if not v:
                 return
 
-        try:
-            # Use urllib instead of requests - simpler and works better with gevent
+        # urllib doesn't yield properly with gevent, so run in threadpool
+        from urllib.request import Request, urlopen
+        from urllib.error import HTTPError
+        import json as json_lib
+
+        def _do_http_request():
             data = json_lib.dumps({'text': arguments.text}).encode('utf-8')
             req = Request(self.analyze_endpoint, data=data, headers={'Content-Type': 'application/json'})
             with urlopen(req, timeout=5.0) as response:
-                json = json_lib.loads(response.read().decode('utf-8'))
+                return json_lib.loads(response.read().decode('utf-8'))
+
+        try:
+            # Run in thread pool so it doesn't block greenlets
+            json = _http_threadpool.spawn(_do_http_request).get()
         except HTTPError as e:
             logger.error(f'HTTP request failed with status {e.code}')
             raise
