@@ -135,12 +135,16 @@ class AnalyzeSentiment(UDFBase[AnalyzeSentimentArguments, None]):
         http_duration = (time() - http_start) * 1000
         logger.info(f'==> HTTP completed in {http_duration:.1f}ms')
 
+        json_start = time()
         json = response.json()
+        json_duration = (time() - json_start) * 1000
+        logger.info(f'==> JSON parsing took {json_duration:.1f}ms')
 
         if not isinstance(json, dict):
             logger.warning(f'==> Response not dict: {type(json)}')
             return
 
+        features_start = time()
         execution_context.add_custom_extracted_features(
             custom_extracted_features=[
                 VeryNegativeSentimentScoreCAF(score=json['very_negative']),
@@ -150,9 +154,11 @@ class AnalyzeSentiment(UDFBase[AnalyzeSentimentArguments, None]):
                 VeryPositiveSentimentScoreCAF(score=json['very_positive']),
             ]
         )
+        features_duration = (time() - features_start) * 1000
+        logger.info(f'==> add_custom_extracted_features took {features_duration:.1f}ms')
 
         total_duration = (time() - start_time) * 1000
-        logger.info(f'==> Sentiment COMPLETED: http={http_duration:.1f}ms total={total_duration:.1f}ms')
+        logger.info(f'==> Sentiment COMPLETED: http={http_duration:.1f}ms json={json_duration:.1f}ms features={features_duration:.1f}ms total={total_duration:.1f}ms')
 
 
 class VeryNegativeSentimentScore(UDFBase[ArgumentsBase, Optional[float]]):
