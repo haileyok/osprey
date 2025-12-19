@@ -1,9 +1,7 @@
 from dataclasses import dataclass
 from typing import List, Optional
-from urllib.request import Request, urlopen
-from urllib.error import HTTPError
-import json as json_lib
 
+import requests
 from osprey.engine.ast_validator.validation_context import ValidationContext
 from osprey.engine.executor.custom_extracted_features import CustomExtractedFeature
 from osprey.engine.executor.execution_context import ExecutionContext
@@ -14,7 +12,7 @@ from osprey.worker.lib.singletons import CONFIG
 
 logger = get_logger('sentiment_udf', dynamic_log_sampler=None)
 
-# Shared thread pool for HTTP requests (urllib doesn't yield properly in gevent)
+# Shared thread pool for HTTP requests (HTTP libraries don't yield properly in gevent)
 import gevent.threadpool
 _http_threadpool = gevent.threadpool.ThreadPool(maxsize=100)
 
@@ -100,10 +98,6 @@ class AnalyzeSentiment(UDFBase[AnalyzeSentimentArguments, None]):
             pass
 
     def execute(self, execution_context: ExecutionContext, arguments: AnalyzeSentimentArguments) -> None:
-        # DEBUG: Check if gevent is actually patched
-        import socket
-        logger.info(f'socket module: {socket.socket.__module__}')
-
         if not self.analyze_endpoint:
             return
 
@@ -114,23 +108,15 @@ class AnalyzeSentiment(UDFBase[AnalyzeSentimentArguments, None]):
             if not v:
                 return
 
-        # urllib doesn't yield properly with gevent, so run in threadpool
-        from urllib.request import Request, urlopen
-        from urllib.error import HTTPError
-        import json as json_lib
-
+        # HTTP libraries don't always yield properly with gevent, so run in threadpool
         def _do_http_request():
-            data = json_lib.dumps({'text': arguments.text}).encode('utf-8')
-            req = Request(self.analyze_endpoint, data=data, headers={'Content-Type': 'application/json'})
-            with urlopen(req, timeout=5.0) as response:
-                return json_lib.loads(response.read().decode('utf-8'))
+            response = requests.post(self.analyze_endpoint, json={'text': arguments.text}, timeout=5.0)
+            response.raise_for_status()
+            return response.json()
 
         try:
             # Run in thread pool so it doesn't block greenlets
             json = _http_threadpool.spawn(_do_http_request).get()
-        except HTTPError as e:
-            logger.error(f'HTTP request failed with status {e.code}')
-            raise
         except Exception as e:
             logger.error(f'HTTP request failed: {e}')
             raise
