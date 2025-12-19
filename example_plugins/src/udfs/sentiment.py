@@ -88,6 +88,8 @@ class VeryPositiveSentimentScoreCAF(CustomExtractedFeature[float]):
 
 
 class AnalyzeSentiment(UDFBase[AnalyzeSentimentArguments, None]):
+    execute_async = True
+
     def __init__(self, validation_context: 'ValidationContext', arguments: AnalyzeSentimentArguments):
         super().__init__(validation_context, arguments)
 
