@@ -1,7 +1,9 @@
 from dataclasses import dataclass
 from typing import List, Optional
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError
+import json as json_lib
 
-import requests
 from osprey.engine.ast_validator.validation_context import ValidationContext
 from osprey.engine.executor.custom_extracted_features import CustomExtractedFeature
 from osprey.engine.executor.execution_context import ExecutionContext
@@ -11,12 +13,6 @@ from osprey.worker.lib.osprey_shared.logging import get_logger
 from osprey.worker.lib.singletons import CONFIG
 
 logger = get_logger('sentiment_udf', dynamic_log_sampler=None)
-
-# Create a session with a larger connection pool for async requests
-_sentiment_session = requests.Session()
-adapter = requests.adapters.HTTPAdapter(pool_connections=100, pool_maxsize=100, max_retries=1)
-_sentiment_session.mount('http://', adapter)
-_sentiment_session.mount('https://', adapter)
 
 
 class AnalyzeSentimentArguments(ArgumentsBase):
@@ -111,16 +107,20 @@ class AnalyzeSentiment(UDFBase[AnalyzeSentimentArguments, None]):
                 return
 
         try:
-            response = _sentiment_session.post(self.analyze_endpoint, json={'text': arguments.text}, timeout=5.0)
-            response.raise_for_status()
+            # Use urllib instead of requests - simpler and works better with gevent
+            data = json_lib.dumps({'text': arguments.text}).encode('utf-8')
+            req = Request(self.analyze_endpoint, data=data, headers={'Content-Type': 'application/json'})
+            with urlopen(req, timeout=5.0) as response:
+                json = json_lib.loads(response.read().decode('utf-8'))
+        except HTTPError as e:
+            logger.error(f'HTTP request failed with status {e.code}')
+            raise
         except Exception as e:
-            logger.error(f'==> HTTP request failed: {e}')
+            logger.error(f'HTTP request failed: {e}')
             raise
 
-        json = response.json()
-
         if not isinstance(json, dict):
-            logger.warning(f'==> Response not dict: {type(json)}')
+            logger.warning(f'Response not dict: {type(json)}')
             return
 
         execution_context.add_custom_extracted_features(
