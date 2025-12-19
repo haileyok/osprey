@@ -78,7 +78,7 @@ class VeryPositiveSentimentScoreCAF(CustomExtractedFeature[float]):
         return self.score
 
 
-class AnalyzeSentiment(UDFBase[AnalyzeSentimentArguments, None]):
+class AnalyzeSentiment(UDFBase[AnalyzeSentimentArguments, Optional[float]]):
     execute_async = True
 
     def __init__(self, validation_context: 'ValidationContext', arguments: AnalyzeSentimentArguments):
@@ -90,16 +90,16 @@ class AnalyzeSentiment(UDFBase[AnalyzeSentimentArguments, None]):
         except Exception:
             pass
 
-    def execute(self, execution_context: ExecutionContext, arguments: AnalyzeSentimentArguments) -> None:
+    def execute(self, execution_context: ExecutionContext, arguments: AnalyzeSentimentArguments) -> Optional[float]:
         if not self.analyze_endpoint:
-            return
+            return None
 
         if not arguments.text:
-            return
+            return None
 
         for v in arguments.when_all:
             if not v:
-                return
+                return None
 
         response = requests.post(self.analyze_endpoint, json={'text': arguments.text})
         response.raise_for_status()
@@ -107,8 +107,9 @@ class AnalyzeSentiment(UDFBase[AnalyzeSentimentArguments, None]):
         json = response.json()
 
         if not isinstance(json, dict):
-            return
+            return None
 
+        # put all the individual scores in the extracted features for looking at in i.e. clickhouse
         execution_context.add_custom_extracted_features(
             custom_extracted_features=[
                 VeryNegativeSentimentScoreCAF(score=json['very_negative']),
@@ -119,18 +120,13 @@ class AnalyzeSentiment(UDFBase[AnalyzeSentimentArguments, None]):
             ]
         )
 
+        # calculate a single polarity score from -1 to +1
+        polarity = (
+            json['very_positive'] * 2.0
+            + json['positive'] * 1.0
+            + json['neutral'] * 0.0
+            + json['negative'] * -1.0
+            + json['very_negative'] * -2.0
+        )
 
-class VeryNegativeSentimentScore(UDFBase[ArgumentsBase, Optional[float]]):
-    def execute(self, execution_context: ExecutionContext, arguments: ArgumentsBase) -> Optional[float]:
-        score = execution_context.get_extracted_features().get('__very_negative_sentiment_score')
-        if not isinstance(score, float):
-            return None
-        return score
-
-
-class NegativeSentimentScore(UDFBase[ArgumentsBase, Optional[float]]):
-    def execute(self, execution_context: ExecutionContext, arguments: ArgumentsBase) -> Optional[float]:
-        score = execution_context.get_extracted_features().get('__negative_sentiment_score')
-        if not isinstance(score, float):
-            return None
-        return score
+        return polarity / 2.0
