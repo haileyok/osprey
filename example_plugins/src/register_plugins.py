@@ -33,6 +33,7 @@ from udfs.list import (
     SimpleListContains,
 )
 from udfs.query_udfs.regex import Regex
+from udfs.sentiment import AnalyzeSentiment, NegativeSentimentScore, VeryNegativeSentimentScore
 from udfs.string import ExtractDomains, ExtractEmoji, ExtractListDomains, ForceString, StringContains, SubstrCount
 from udfs.tokenize import Tokenize
 
@@ -72,6 +73,9 @@ def register_udfs() -> Sequence[Type[UDFBase[Any, Any]]]:
         DidFromUri,
         ConcatStringLists,
         AtprotoLabel,
+        AnalyzeSentiment,
+        VeryNegativeSentimentScore,
+        NegativeSentimentScore,
         # Query UDFs
         Regex,
     ]
