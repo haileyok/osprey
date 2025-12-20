@@ -36,6 +36,7 @@ from udfs.query_udfs.regex import Regex
 from udfs.sentiment import AnalyzeSentiment
 from udfs.string import ExtractDomains, ExtractEmoji, ExtractListDomains, ForceString, StringContains, SubstrCount
 from udfs.tokenize import Tokenize
+from udfs.toxicity import AnalyzeToxicity
 
 
 @hookimpl_osprey
@@ -74,6 +75,7 @@ def register_udfs() -> Sequence[Type[UDFBase[Any, Any]]]:
         ConcatStringLists,
         AtprotoLabel,
         AnalyzeSentiment,
+        AnalyzeToxicity,
         # Query UDFs
         Regex,
     ]
