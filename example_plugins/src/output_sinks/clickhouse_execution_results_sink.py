@@ -108,6 +108,7 @@ class ClickhouseExecutionResultsSink(BaseOutputSink):
             self._ch_client.insert(
                 table=f'{self._ch_database}.{self._ch_table}', data=data_rows, column_names=col_names
             )
+            status = 'ok'
             logger.info(f'Inserted {len(batch)} rows into ClickHouse')
         except Exception as e:
             logger.error(f'Error flushing batch to Clickhouse: {e}')
