@@ -1,13 +1,19 @@
 from typing import Any, Sequence, Type
 
+from input_streams.kafka_input_stream import KafkaInputStream
+from osprey.engine.executor.execution_context import Action
 from osprey.engine.udf.base import UDFBase
 from osprey.worker.adaptor.plugin_manager import hookimpl_osprey
 from osprey.worker.lib.config import Config
+from osprey.worker.lib.singletons import CONFIG
 from osprey.worker.lib.storage.labels import LabelsServiceBase
+from osprey.worker.sinks.sink.input_stream import BaseInputStream
 from osprey.worker.sinks.sink.output_sink import BaseOutputSink
+from osprey.worker.sinks.utils.acking_contexts import BaseAckingContext
 from output_sinks.clickhouse_execution_results_sink import ClickhouseExecutionResultsSink
 from output_sinks.ozone_label_sink import OzoneLabelSink
 from services.ozone_labels_service import OzoneLabelsService
+from shared.metrics import prom_metrics
 from udfs.atproto.diduri import DidFromUri
 from udfs.atproto.facets import LinksFromFacets, MentionsFromFacets, TagsFromFacets
 from udfs.atproto.label import AtprotoLabel
@@ -79,6 +85,16 @@ def register_udfs() -> Sequence[Type[UDFBase[Any, Any]]]:
         # Query UDFs
         Regex,
     ]
+
+
+@hookimpl_osprey
+def register_input_stream() -> BaseInputStream[BaseAckingContext[Action]]:
+    config = CONFIG.instance()
+    prom_metrics.start_http(
+        port=config.get_int('OSPREY_PROM_METRICS_PORT', 9090),
+        addr=config.get_str('OSPREY_PROM_METRICS_ADDR', '127.0.0.1'),
+    )
+    return KafkaInputStream(config=config)
 
 
 @hookimpl_osprey

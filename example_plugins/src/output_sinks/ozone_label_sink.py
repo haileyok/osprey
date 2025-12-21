@@ -3,6 +3,7 @@ from osprey.worker.lib.config import Config
 from osprey.worker.lib.osprey_shared.logging import get_logger
 from osprey.worker.sinks.sink.output_sink import BaseOutputSink
 from services.ozone_client import OzoneClient
+from shared.metrics import prom_metrics
 from udfs.atproto.label import AtprotoLabelEffect
 
 logger = get_logger('ozone_label_sink')
@@ -34,8 +35,8 @@ class OzoneLabelSink(BaseOutputSink):
     def _apply_label(self, action_id: int, effect: AtprotoLabelEffect):
         if self._client is None:
             logger.error('No Ozone client initialized')
-            return
 
+        status = 'error'
         try:
             self._client.add_or_remove_label(
                 action_id=action_id,
@@ -46,9 +47,12 @@ class OzoneLabelSink(BaseOutputSink):
                 expiration_in_hours=effect.expiration_in_hours,
                 cid=effect.cid,
             )
+            status = 'ok'
         except Exception as e:
             logger.error(f'Failed to emit label event: {e}')
             return
+        finally:
+            prom_metrics.labels_emitted.labels(label=effect.label, status=status).inc()
 
         logger.info(f'Successfully emitted label event for {effect.entity}: {effect.label}')
 

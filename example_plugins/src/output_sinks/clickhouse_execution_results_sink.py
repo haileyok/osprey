@@ -1,4 +1,5 @@
 from datetime import datetime
+from time import time
 from typing import Any, Dict, List, Set
 
 import clickhouse_connect
@@ -8,6 +9,7 @@ from osprey.engine.executor.execution_context import ExecutionResult
 from osprey.worker.lib.config import Config
 from osprey.worker.lib.osprey_shared.logging import get_logger
 from osprey.worker.sinks.sink.output_sink import BaseOutputSink
+from shared.metrics import prom_metrics
 
 logger = get_logger('clickhouse_execution_results_sink')
 
@@ -56,26 +58,24 @@ class ClickhouseExecutionResultsSink(BaseOutputSink):
         row: Dict[str, Any] = {}
         row.update(result.extracted_features)
 
-        should_flush = False
+        batch_to_flush = None
         with self._batch_lock:
             self._batch.append(row)
             if len(self._batch) >= self._ch_batch_size:
-                should_flush = True
+                batch_to_flush = self._batch.copy()
+                self._batch = []
 
-        if should_flush:
-            self._flush_batch()
+        if batch_to_flush:
+            self._flush_batch(batch_to_flush)
 
-    def _flush_batch(self) -> None:
-        """Insert the current batch into Clickhouse"""
-        with self._batch_lock:
-            if not self._batch:
-                return
+    def _flush_batch(self, batch: List[Dict[str, Any]]) -> None:
+        """Insert a batch into Clickhouse"""
 
-            batch_to_flush = self._batch.copy()
-            self._batch.clear()
+        status = 'error'
+        start_time = time()
 
         all_fields: Set[str] = set()
-        for row in batch_to_flush:
+        for row in batch:
             all_fields.update(row.keys())
 
         new_fields = all_fields - self._known_columns
@@ -84,18 +84,18 @@ class ClickhouseExecutionResultsSink(BaseOutputSink):
                 with self._schema_lock:
                     new_fields = all_fields - self._known_columns
                     if new_fields:
-                        self._add_columns(new_fields, batch_to_flush)
+                        self._add_columns(new_fields, batch)
                         self._known_columns.update(new_fields)
             except Exception as e:
                 logger.error(f'Error updating the Clickhouse table schema: {e}')
                 with self._batch_lock:
-                    self._batch.extend(batch_to_flush)
+                    self._batch.extend(batch)
                 raise
 
         col_names: List[str] = sorted(self._known_columns)
 
         data_rows: List[List[Any]] = []
-        for row in batch_to_flush:
+        for row in batch:
             data_row = []
             for col in col_names:
                 val = row.get(col)
@@ -108,12 +108,15 @@ class ClickhouseExecutionResultsSink(BaseOutputSink):
             self._ch_client.insert(
                 table=f'{self._ch_database}.{self._ch_table}', data=data_rows, column_names=col_names
             )
-            logger.info(f'Inserted {len(batch_to_flush)} rows into ClickHouse')
+            logger.info(f'Inserted {len(batch)} rows into ClickHouse')
         except Exception as e:
             logger.error(f'Error flushing batch to Clickhouse: {e}')
             with self._batch_lock:
-                self._batch.extend(batch_to_flush)
+                self._batch.extend(batch)
             raise
+        finally:
+            prom_metrics.clickhouse_inserts.labels(status=status).inc(amount=len(batch))
+            prom_metrics.clickhouse_insert_duration.labels(status=status).observe(time() - start_time)
 
     def _get_schema(self) -> Set[str]:
         """Get the current schema of the Clickhouse table"""
