@@ -11,7 +11,7 @@ services:
     hostname: kafka
     container_name: kafka
     ports:
-      - "9092:9092"
+      - "127.0.0.1:9092:9092"
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: "broker,controller"
@@ -43,8 +43,8 @@ services:
     container_name: minio
     hostname: minio
     ports:
-      - "9000:9000" # minio API
-      - "9001:9001" # minio Console
+      - "127.0.0.1:9000:9000" # minio API
+      - "127.0.0.1:9001:9001" # minio Console
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin123
@@ -157,7 +157,7 @@ services:
       - postgres
       - snowflake-id-worker
     ports:
-      - "5004:5004"
+      - "127.0.0.1:5004:5004"
     command: ["osprey-ui-api"]
     environment:
       - PYTHONPATH=/osprey
@@ -198,7 +198,7 @@ services:
     depends_on:
       - osprey-ui-api
     ports:
-      - "5002:5002"
+      - "127.0.0.1:5002:5002"
     environment:
       - NODE_ENV=development
       - REACT_APP_API_BASE_URL=http://localhost:5004
@@ -211,7 +211,7 @@ services:
     container_name: snowflake-id-worker
     image: ghcr.io/ayubun/snowflake-id-worker:0
     ports:
-      - "8088:8088"
+      - "127.0.0.1:8088:8088"
     environment:
       - WORKER_ID=0
       - DATA_CENTER_ID=0
@@ -247,7 +247,7 @@ services:
     container_name: postgres
     image: postgres:18
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - metadata_data:/var/lib/postgresql
     environment:
@@ -269,8 +269,8 @@ services:
       kafka:
         condition: service_healthy
     ports:
-      - "8123:8123"
-      - "9009:9000"
+      - "127.0.0.1:8123:8123"
+      - "127.0.0.1:9009:9000"
     volumes:
       - clickhouse_data:/var/lib/clickhouse
     environment:
@@ -302,7 +302,7 @@ services:
         condition: service_healthy
     container_name: atkafka
     ports:
-      - "6010:6009"
+      - "127.0.0.1:6010:6009"
     environment:
       ATKAFKA_RELAY_HOST: "wss://bsky.network"
       ATKAFKA_BOOTSTRAP_SERVERS: "kafka:29092"
@@ -316,7 +316,7 @@ services:
     hostname: redis
     container_name: redis
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes
