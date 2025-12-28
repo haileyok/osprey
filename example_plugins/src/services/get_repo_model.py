@@ -19,7 +19,7 @@ class Profile(BaseModel):
     type: str = Field(alias='$type')
     avatar: Optional[Blob] = None
     banner: Optional[Blob] = None
-    created_at: datetime = Field(alias='createdAt')
+    created_at: Optional[datetime] = Field(default=None, alias='createdAt')
     description: str = ''
     display_name: str = Field(default='', alias='displayName')
 
