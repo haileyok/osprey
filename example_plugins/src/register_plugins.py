@@ -17,6 +17,7 @@ from shared.metrics import prom_metrics
 from udfs.atproto.diduri import DidFromUri
 from udfs.atproto.facets import LinksFromFacets, MentionsFromFacets, TagsFromFacets
 from udfs.atproto.label import AtprotoLabel
+from udfs.atproto.list import AtprotoList
 from udfs.cache import (
     CacheGetFloat,
     CacheGetInt,
@@ -80,6 +81,7 @@ def register_udfs() -> Sequence[Type[UDFBase[Any, Any]]]:
         DidFromUri,
         ConcatStringLists,
         AtprotoLabel,
+        AtprotoList,
         AnalyzeSentiment,
         AnalyzeToxicity,
         # Query UDFs

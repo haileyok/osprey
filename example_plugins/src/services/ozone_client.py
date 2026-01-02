@@ -1,5 +1,6 @@
 import threading
-from typing import Any, Dict, Optional
+from datetime import datetime, timezone
+from typing import Any
 
 import requests
 from osprey.worker.lib.config import Config
@@ -12,7 +13,7 @@ logger = get_logger('ozone_session')
 
 
 class OzoneClient:
-    _instance: Optional['OzoneClient'] = None
+    _instance: 'OzoneClient | None' = None
     _init_lock = threading.Lock()
 
     def __init__(self, config: Config):
@@ -41,16 +42,16 @@ class OzoneClient:
         entity_id: str,
         label: str,
         neg: bool,
-        comment: Optional[str] = None,
-        expiration_in_hours: Optional[int] = None,
-        cid: Optional[str] = None,
+        comment: str | None = None,
+        expiration_in_hours: int | None = None,
+        cid: str | None = None,
     ):
         if self._session is None:
             logger.error('Bluesky session not initialized, cannot apply label')
             return
 
         try:
-            subject: Dict[str, str] = {}
+            subject: dict[str, str] = {}
             if entity_id.startswith('did:'):
                 subject['$type'] = 'com.atproto.admin.defs#repoRef'
                 subject['did'] = entity_id
@@ -59,7 +60,7 @@ class OzoneClient:
                 subject['cid'] = cid or ''
                 subject['uri'] = entity_id
 
-            payload: Dict[str, Any] = {
+            payload: dict[str, Any] = {
                 'subject': subject,
                 'createdBy': self._session.get_did(),
                 'subjectBlobCids': [],
@@ -84,10 +85,30 @@ class OzoneClient:
         except Exception as e:
             logger.error(f'Failed to emit label event: {e}')
 
+    def add_did_to_list(self, did: str, list_uri: str):
+        assert self._session is not None
+
+        try:
+            payload: dict[str, Any] = {
+                'repo': self._session.get_did(),
+                'collection': 'app.bsky.graph.listitem',
+                'validate': True,
+                'record': {'subject': did, 'list': list_uri, 'createdAt': datetime.now(timezone.utc).isoformat()},
+            }
+
+            headers = self._session.get_headers()
+
+            response = requests.post(
+                f'{self._pds_url}/xrpc/com.atproto.repo.createRecord', headers=headers, json=payload
+            )
+            response.raise_for_status()
+        except Exception as e:
+            logger.error(f'Failed to create listitem record: {e}')
+
     def get_did_labels(self, did: str) -> EntityLabels:
         """Fetches labels from the configured ozone instance for a particular DID. Uses tools.ozone.moderation.getRepo."""
 
-        params: Dict[str, Any] = {
+        params: dict[str, Any] = {
             'did': did,
         }
 
@@ -113,7 +134,7 @@ class OzoneClient:
         if not repo.labels:
             return create_empty_entity_labels()
 
-        labels: Dict[str, LabelState] = {}
+        labels: dict[str, LabelState] = {}
 
         if repo.labels:
             for label in repo.labels:
@@ -126,5 +147,5 @@ class OzoneClient:
 
 
 def create_empty_entity_labels():
-    labels: Dict[str, LabelState] = {}
+    labels: dict[str, LabelState] = {}
     return EntityLabels(labels=labels)

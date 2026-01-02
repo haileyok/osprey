@@ -5,6 +5,7 @@ from osprey.worker.sinks.sink.output_sink import BaseOutputSink
 from services.ozone_client import OzoneClient
 from shared.metrics import prom_metrics
 from udfs.atproto.label import AtprotoLabelEffect
+from udfs.atproto.list import AtprotoListEffect
 
 logger = get_logger('ozone_label_sink')
 
@@ -27,14 +28,13 @@ class OzoneLabelSink(BaseOutputSink):
 
         for effects in result.effects.values():
             for effect in effects:
-                if not isinstance(effect, AtprotoLabelEffect):
+                if isinstance(effect, AtprotoLabelEffect):
+                    self._apply_label(action_id, effect)
+                elif isinstance(effect, AtprotoListEffect):
                     continue
 
-                self._apply_label(action_id, effect)
-
     def _apply_label(self, action_id: int, effect: AtprotoLabelEffect):
-        if self._client is None:
-            logger.error('No Ozone client initialized')
+        assert self._client is not None
 
         status = 'error'
         try:
@@ -55,6 +55,17 @@ class OzoneLabelSink(BaseOutputSink):
             prom_metrics.labels_emitted.labels(label=effect.label, status=status).inc()
 
         logger.info(f'Successfully emitted label event for {effect.entity}: {effect.label}')
+
+    def _add_to_list(self, effect: AtprotoListEffect):
+        assert self._client is not None
+
+        try:
+            self._client.add_did_to_list(did=effect.did, list_uri=effect.list_uri)
+        except Exception as e:
+            logger.error(f'Failed to create list record: {e}')
+            return
+
+        logger.info(f'Successfully added {effect.did} to {effect.list_uri}')
 
     def stop(self) -> None:
         pass
