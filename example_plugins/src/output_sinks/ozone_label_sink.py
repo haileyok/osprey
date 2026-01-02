@@ -31,7 +31,7 @@ class OzoneLabelSink(BaseOutputSink):
                 if isinstance(effect, AtprotoLabelEffect):
                     self._apply_label(action_id, effect)
                 elif isinstance(effect, AtprotoListEffect):
-                    continue
+                    self._add_to_list(effect)
 
     def _apply_label(self, action_id: int, effect: AtprotoLabelEffect):
         assert self._client is not None
