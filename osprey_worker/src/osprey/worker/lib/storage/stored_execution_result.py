@@ -376,7 +376,9 @@ class StoredExecutionResultGCS(ExecutionResultStore):
 
 class StoredExecutionResultMinIO(ExecutionResultStore):
     def __init__(self, endpoint: str, access_key: str, secret_key: str, secure: bool, bucket_name: str):
-        http_client = urllib3.PoolManager(num_pools=50, maxsize=50, retries=urllib3.Retry(total=3, backoff_factor=0.2))
+        http_client = urllib3.PoolManager(
+            num_pools=100, maxsize=100, retries=urllib3.Retry(total=3, backoff_factor=0.2)
+        )
 
         self._minio_client = Minio(
             endpoint, access_key=access_key, secret_key=secret_key, secure=secure, http_client=http_client
