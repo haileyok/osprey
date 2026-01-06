@@ -9,7 +9,7 @@ from osprey.engine.executor.execution_context import ExecutionContext
 from osprey.engine.udf.arguments import ArgumentsBase
 from osprey.engine.udf.base import UDFBase
 from osprey.worker.lib.osprey_shared.logging import get_logger
-from udfs.censorize import regex
+from udfs.censorize import censor_cache
 
 logger = get_logger('list')
 
@@ -150,7 +150,7 @@ class ListCache:
             if isinstance(data, list):
                 items = cast(List[str], data)
                 for item in items:
-                    pattern = regex(item, include_plural=plurals, include_substrings=substrings)
+                    pattern = censor_cache.get_censorized_regex(item, plurals=plurals, substrings=substrings)
                     compiled_patterns.append(pattern)
 
             self._regex_cache[cache_key] = compiled_patterns

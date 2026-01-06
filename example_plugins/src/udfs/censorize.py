@@ -1637,76 +1637,113 @@ lookalikes = {
 }
 
 
-def censorize(tok: str, char_set: Dict[str, List[str]] = lookalikes) -> List[str]:
-    """Generate all variations of a token based on character replacements."""
-    tok_variations = ['']
+def censorize(token: str, char_set: Dict[str, List[str]]) -> List[str]:
+    """
+    Generate all variations of a token based on character replacements. Note that `censorize` can become quite expensive
+    to run with extremely large strings. You should always pass in individual tokens to censorize rather than blocks of
+    text.
 
-    for char in tok:
+    This function merely returns a list of patterns and is mostly useful for testing/visualizing what an output would
+    look like.
+    """
+
+    # NOTE: it's probably worth adding some protections here to prevent excessively long strings from being
+    # passed to censorize
+
+    token_variations = ['']
+
+    # example word "cat"
+    # we loop over each character that is in the token
+    for char in token:
+        # we grab the character variations from the provided lookalikes set
+        # for c we'd get c, C, and < (among others above obviously)
+        # for a we'd get a, A, and @
+        # for t we'd get t, T, and 7
         char_variations = char_set.get(char)
+
         # if there wasn't one, just use the char itself
         if char_variations is None:
             char_variations = [char]
 
-        new_tok_variations: List[str] = []
-        for tok_variation in tok_variations:
-            for char_variation in char_variations:
-                new_tok_variations.append(tok_variation + char_variation)
-        tok_variations = new_tok_variations
+        # make a new list that we'll replace the previous one with
+        new_token_variations: List[str] = []
 
-    return tok_variations
+        # for each existing variation, we'll make a new variation with _each_ of the characters in the set
+        # to start, we'll get a list that is 'c', 'C', and '<'
+        # on the next loop, we'll get 'ca', 'cA', 'c@', 'Ca', 'CA', 'C@', '<a', '<cA', '<@'
+        # and so on for each additional token...
+        for tok_variation in token_variations:
+            for char_variation in char_variations:
+                new_token_variations.append(tok_variation + char_variation)
+
+        # replace the previous tokens with the new ones for the next loop
+        token_variations = new_token_variations
+
+    return token_variations
 
 
 def create_censorize_regex(
-    tok: str,
+    token: str,
     include_plural: bool,
     include_substrings: bool,
-    char_set: Dict[str, List[str]],
-) -> str:
-    """Create a regex pattern for matching variations of a token."""
+    char_set: Dict[str, List[str]] = lookalikes,
+) -> re.Pattern[str]:
+    """
+    Create a compiled regex pattern that matches all variations of a token based on character replacement set.
 
-    tok = tok.lower()
+    Args:
+        token: The token to create a censorized regex for
+        include_plural: Will allow for each pattern to be compatible with plurals, i.e. if 'cat' is passed, the pattern will be 'cat[sS$]?'
+        include_substrings: Whether substrings of characters are allowed, i.e. if "concatenate" will match "cat" or not
+        char_set: The set of lookalike characters you wish to use. Defaults to the provided lookalike charset
+    """
+
+    token = token.lower()
 
     regex = ''
+
+    # if we're not including substrings, start with forcing word boundary at the beginning of the string
+    # q: i think we could actually use '\b' in python, but i'm not certain
     if not include_substrings:
         regex += r'(^|\W)'
 
-    for index, char in enumerate(tok):
+    # start by looping over each character in the token
+    for index, char in enumerate(token):
         char_variations = char_set.get(char)
         if char_variations is None:
             char_variations = [char]
 
+        # place each possible character in the pattern
         regex += '['
         for char_variation in char_variations:
             regex += re.escape(char_variation)
         regex += ']'
 
-        if index < len(tok) - 1:
-            regex += r'(,.+/|&%#!@_)*'
+        # if this isn't the last character in the token, we want to allow for "space" characters that people
+        # often use, i.e. 'c#a#t' or 'c_a_t'. note that we are not adding unicode zerowidths here, since it
+        # is probably best to use CleanString() to handle these before hand
+        if index < len(token) - 1:
+            regex += r'[,.+/|&%#!@_]*'
 
+    # once we are at the end of the string, add on any possible s character if we are checking for substrings
     if include_plural:
-        s_variations = char_set.get('s', ['s'])
+        # start by adding our space characters
+        regex += r'[,.+/|&%#!@_]*'
+
+        # grab the s variations from the charset
+        s_variations = char_set.get('s', ['s', 'S'])
+
+        # append each of the s variations
         regex += '['
         for s_variation in s_variations:
             regex += re.escape(s_variation)
         regex += ']?'
 
+    # follow up with a word boundary if we are not checking substrings
     if not include_substrings:
         regex += r'(\W|$)'
 
-    return regex
-
-
-def regex_multiple(substrs: bool, *strs: str) -> List[re.Pattern[str]]:
-    """Create multiple regex patterns."""
-    regs: List[re.Pattern[str]] = []
-    for s in strs:
-        regs.append(regex(s, False, substrs))
-    return regs
-
-
-def regex(tok: str, include_plural: bool, include_substrings: bool) -> re.Pattern[str]:
-    """Create a compiled regex pattern for matching token variations."""
-    return re.compile(create_censorize_regex(tok, include_plural, include_substrings, lookalikes))
+    return re.compile(regex)
 
 
 space_chars_regex = re.compile(r'[*∗٭ꭈ𐌟]')
@@ -1714,12 +1751,20 @@ underlines_regex = re.compile('[\u035a-\u035f]')
 
 
 def remove_space_chars(text: str) -> str:
-    """Remove space-like characters from text."""
+    """
+    Removes space-like characters from the given text. Note that this does _not_ replace actual spaces, but rather some unicode
+    space-likes such as ◌͚.
+    """
+
     return space_chars_regex.sub('', text)
 
 
 def remove_underlines(text: str) -> str:
-    """Remove combining marks (underlines) from text. Example would be b_i_t_c_h or f___u___c___k turning into bitch or fuck."""
+    """
+    Remove underscores/underlines from text, regardless of how many there are.
+    Example would be c_a_t or c___a___t turning into cat.
+    """
+
     output: List[str] = []
     for char in text:
         if not unicodedata.category(char).startswith('Mn'):
@@ -1729,20 +1774,15 @@ def remove_underlines(text: str) -> str:
 
 def remove_single_quotes(text: str) -> str:
     """Remove single quotes from text."""
+
     return text.replace("'", '')
 
 
 def remove_zero_width_space(text: str) -> str:
     """Remove zero-width spaces from text."""
+
     text = text.replace('\u200b', '')
     text = text.replace('\u200e', '')
-    return text
-
-
-def clean(text: str) -> str:
-    """Clean text by removing zero-width spaces and underlines."""
-    text = remove_zero_width_space(text)
-    text = remove_underlines(text)
     return text
 
 
@@ -1751,6 +1791,10 @@ class CensorCache:
         self._cache: Dict[str, re.Pattern[str]] = {}
 
     def get_censorized_regex(self, term: str, plurals: bool, substrings: bool) -> re.Pattern[str]:
+        """
+        Gets a regex pattern from the regex cache or creates a new one if it is not already in the cache.
+        """
+
         cache_key = term
         if plurals:
             cache_key = f'{cache_key}-yp'
@@ -1758,7 +1802,7 @@ class CensorCache:
             cache_key = f'{cache_key}-ysbs'
 
         if cache_key not in self._cache:
-            pattern = regex(term, include_plural=plurals, include_substrings=substrings)
+            pattern = create_censorize_regex(term, include_plural=plurals, include_substrings=substrings)
             self._cache[cache_key] = pattern
 
         return self._cache[cache_key]
@@ -1769,13 +1813,43 @@ censor_cache = CensorCache()
 
 class CheckCensorizedArguments(ArgumentsBase):
     s: str
+    """
+    The input string to check
+    """
+
     pattern: str
+    """
+    The string to create a regex pattern for.
+    """
+
     plurals: bool = False
+    """
+    Whether to check for plurals of the string as well. I.e. if the input is 'cat', match both 'cat' and 'cats'.
+
+    Default: False
+    """
+
     substrings: bool = False
+    """
+    Whether to check substrings of the input string. I.e. 'concatenate' would match the pattern created for 'cat'.
+
+    Default: False
+    """
+
     must_be_censorized: bool = False
+    """
+    Whether a string must be censorized to return True. For example, 'cat' itself would return false but 'c@t'
+    would return true.
+
+    Default: False
+    """
 
 
 class CheckCensorized(UDFBase[CheckCensorizedArguments, bool]):
+    """
+    Checks a given string against another string's censorized regex.
+    """
+
     def execute(self, execution_context: ExecutionContext, arguments: CheckCensorizedArguments) -> bool:
         pattern = censor_cache.get_censorized_regex(
             arguments.pattern, plurals=arguments.plurals, substrings=arguments.substrings
@@ -1794,13 +1868,42 @@ class CheckCensorized(UDFBase[CheckCensorizedArguments, bool]):
 
 class CleanStringArguments(ArgumentsBase):
     s: str
+    """The string to clean"""
+
     zero_width: bool = True
+    """
+    Whether to remove zero-width Unicode spaces. Commonly used to prevent words from matching filters (invisible characters that prevent patterns from matching).
+
+    Default: True
+    """
+
     underlines: bool = True
+    """
+    Whether to remove underscores/underlines from being removed from the string. I.e. 'c___a_t' will turn into 'cat'
+
+    Default: True
+    """
+
     space_likes: bool = False
+    """
+    Whether to remove space-like Unicode characters (but not true spaces) from the text.
+
+    Default: False
+    """
+
     single_quotes: bool = False
+    """
+    Whether to remove single quotes from the text.
+
+    Default: False
+    """
 
 
 class CleanString(UDFBase[CleanStringArguments, str]):
+    """
+    Cleans an input string with the provided options.
+    """
+
     def execute(self, execution_context: ExecutionContext, arguments: CleanStringArguments) -> str:
         return self._execute(arguments)
 
