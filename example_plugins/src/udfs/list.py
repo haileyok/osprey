@@ -1,6 +1,5 @@
 import os
 import re
-from dataclasses import dataclass
 from typing import Dict, List, Optional, Set, cast
 
 import yaml
@@ -18,19 +17,33 @@ RULES_PATH = os.getenv('OSPREY_RULES_PATH', 'example_rules/')
 
 class ListCache:
     def __init__(self) -> None:
+        # a cache of lists for checking against, so we avoid having to read the YAML files all the time
         self._cache: Dict[str, Set[str]] = {}
+        # same as _cache, but for lists of regex patterns rather than strings
         self._regex_cache: Dict[str, List[re.Pattern[str]]] = {}
+        # an optional Sources class that allows for specifying i.e. etcd sources instead of the base rules directory
+        # currently unused...may be implemented if upstreaming these changes
         self._sources: Optional[Sources] = None
 
     def set_sources(self, sources: Sources) -> None:
-        """Set the sources object and clear cache to reload from new sources."""
+        """
+        Set the sources object and clear cache to reload from new sources.
+
+        This should be called any time that the ruleset gets re-loaded, i.e. whenever new changes are
+        deployed via etcd.
+        """
+        # update the sources then clear each list
         self._sources = sources
         self._cache.clear()
         self._regex_cache.clear()
         logger.info('ListCache sources updated, cache cleared')
 
     def _load_list_data(self, list_name: str):
-        """Load list data from sources (etcd) or fall back to disk."""
+        """
+        Load list data from sources or fall back to disk.
+
+        If no source is defined, we will only load the lists that are present at runtime
+        """
         if self._sources:
             try:
                 list_path = f'lists/{list_name}.yaml'
@@ -55,6 +68,9 @@ class ListCache:
             return None
 
     def get_list(self, list_name: str, case_sensitive: bool) -> Set[str]:
+        """
+        Get a list from the cache, or load it in if not already present in the cache.
+        """
         try:
             cache_key = list_name
             if case_sensitive:
@@ -169,28 +185,35 @@ class ListCache:
 list_cache = ListCache()
 
 
-class ListContainsArguments(ArgumentsBase):
+class ListContainsArgumentsBase(ArgumentsBase):
+    phrases: List[Optional[str]]
+    """List of strings to check for in the list"""
+
+    case_sensitive = False
+    """Whether the phrases should be checked with exact casing or not"""
+
+    word_boundaries = True
+    """Whether to use word boundaries or not when checking phrases"""
+
+
+class ListContainsArguments(ListContainsArgumentsBase):
     list: str
-    phrases: List[Optional[str]]
-    case_sensitive = False
-    word_boundaries = True
+    """Name of the list, which is the name of the YAML file minus the extension. I.e. toxic_words.yaml would be named toxic_words"""
 
 
-class SimpleListContainsArguments(ArgumentsBase):
+class SimpleListContainsArguments(ListContainsArgumentsBase):
     cache_name: str
+    """A cache name for the simple list that you are creating. Should be unique to other simple lists created in the ruleset."""
+
     list: List[str]
-    phrases: List[Optional[str]]
-    case_sensitive = False
-    word_boundaries = True
-
-
-@dataclass
-class ListContainsResult:
-    contains: bool
-    word: Optional[str]
+    """A list of strings that are included in the simple list"""
 
 
 class ListContains(UDFBase[ListContainsArguments, Optional[str]]):
+    """
+    Checks if a list (YAML-based) contains any of the given input strings.
+    """
+
     def execute(self, execution_context: ExecutionContext, arguments: ListContainsArguments) -> Optional[str]:
         list_items = list_cache.get_list(arguments.list, case_sensitive=arguments.case_sensitive)
 
@@ -215,6 +238,10 @@ class ListContains(UDFBase[ListContainsArguments, Optional[str]]):
 
 
 class ListContainsCount(UDFBase[ListContainsArguments, int]):
+    """
+    The number of "hits" found in the list for the given input string
+    """
+
     def execute(self, execution_context: ExecutionContext, arguments: ListContainsArguments) -> int:
         list_items = list_cache.get_list(arguments.list, case_sensitive=arguments.case_sensitive)
 
@@ -241,6 +268,10 @@ class ListContainsCount(UDFBase[ListContainsArguments, int]):
 
 
 class SimpleListContains(UDFBase[SimpleListContainsArguments, Optional[str]]):
+    """
+    Similar to ListContains, but allows you to supply the list of strings in an SML rule instead of in a YAML file.
+    """
+
     def execute(self, execution_context: ExecutionContext, arguments: SimpleListContainsArguments) -> Optional[str]:
         list_items = list_cache.get_simple_list(arguments.cache_name, arguments.list, arguments.case_sensitive)
 
@@ -263,14 +294,19 @@ class SimpleListContains(UDFBase[SimpleListContainsArguments, Optional[str]]):
         return None
 
 
-class RegexListMatchArguments(ArgumentsBase):
+class RegexListContainsArguments(ArgumentsBase):
     list: str
     phrases: List[str]
     case_sensitive = False
 
 
-class RegexListMatch(UDFBase[RegexListMatchArguments, Optional[str]]):
-    def execute(self, execution_context: ExecutionContext, arguments: RegexListMatchArguments) -> Optional[str]:
+class RegexListContains(UDFBase[RegexListContainsArguments, Optional[str]]):
+    """
+    Similar to ListContains, but the input YAML-based list should contain regex patterns rather than simple strings.
+    The input string is checked against each compiled regex.
+    """
+
+    def execute(self, execution_context: ExecutionContext, arguments: RegexListContainsArguments) -> Optional[str]:
         patterns = list_cache.get_regex_list(arguments.list, case_sensitive=arguments.case_sensitive)
 
         for phrase in arguments.phrases:
@@ -281,23 +317,33 @@ class RegexListMatch(UDFBase[RegexListMatchArguments, Optional[str]]):
         return None
 
 
-class CensorizedListMatchArguments(ArgumentsBase):
-    list: str
-    phrases: List[str]
+class CensorizedListContainsArguments(ListContainsArguments):
     plurals: bool = False
-    substrings: bool = False
+    """Whether the censorized regex that are created should include plural matches or not"""
+
     must_be_censorized: bool = False
+    """
+    Whether matches must be a censored version of a string, i.e. "cat" would only match something like "<4t"
+    """
 
 
-class CensorizedListMatch(UDFBase[CensorizedListMatchArguments, Optional[str]]):
-    def execute(self, execution_context: ExecutionContext, arguments: CensorizedListMatchArguments) -> Optional[str]:
+class CensorizedListContains(UDFBase[CensorizedListContainsArguments, Optional[str]]):
+    """
+    Similar to ListContains, but each string in the YAML-based list will first be "censorized". This means that
+    when given the word "cat" in the list, variations like c@t or <4t will also be matched.
+    """
+
+    def execute(self, execution_context: ExecutionContext, arguments: CensorizedListContainsArguments) -> Optional[str]:
         patterns = list_cache.get_censorized_regex_list(
             list_name=arguments.list,
             plurals=arguments.plurals,
-            substrings=arguments.substrings,
+            substrings=arguments.word_boundaries,
         )
 
         for phrase in arguments.phrases:
+            if phrase is None:
+                continue
+
             for pattern in patterns:
                 match = pattern.search(phrase)
                 if not match:
@@ -314,10 +360,17 @@ class CensorizedListMatch(UDFBase[CensorizedListMatchArguments, Optional[str]]):
 
 class ConcatStringListsArguments(ArgumentsBase):
     lists: List[List[str]]
+    """Lists of strings to combine into a single list"""
+
     optional_lists: List[List[Optional[str]]] = []
+    """Lists of strings or None values to combine into a single list. None values will be excluded from the result."""
 
 
 class ConcatStringLists(UDFBase[ConcatStringListsArguments, List[str]]):
+    """
+    Combines two lists of strings to create a single list, which can then be passed to one of the ListContains `phrase` parameters.
+    """
+
     def execute(self, execution_context: ExecutionContext, arguments: ConcatStringListsArguments) -> List[str]:
         final: List[str] = []
 

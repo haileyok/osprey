@@ -32,11 +32,11 @@ from udfs.cache import (
 from udfs.censorize import CheckCensorized, CleanString
 from udfs.domain import RootDomain
 from udfs.list import (
-    CensorizedListMatch,
+    CensorizedListContains,
     ConcatStringLists,
     ListContains,
     ListContainsCount,
-    RegexListMatch,
+    RegexListContains,
     SimpleListContains,
 )
 from udfs.query_udfs.regex import Regex
@@ -60,8 +60,8 @@ def register_udfs() -> Sequence[Type[UDFBase[Any, Any]]]:
         ListContains,
         ListContainsCount,
         SimpleListContains,
-        RegexListMatch,
-        CensorizedListMatch,
+        RegexListContains,
+        CensorizedListContains,
         ForceString,
         CacheGetStr,
         CacheGetInt,
