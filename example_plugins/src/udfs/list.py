@@ -337,7 +337,7 @@ class CensorizedListContains(UDFBase[CensorizedListContainsArguments, Optional[s
         patterns = list_cache.get_censorized_regex_list(
             list_name=arguments.list,
             plurals=arguments.plurals,
-            substrings=arguments.word_boundaries,
+            substrings=not arguments.word_boundaries,
         )
 
         for phrase in arguments.phrases:

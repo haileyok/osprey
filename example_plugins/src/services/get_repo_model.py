@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field
 
@@ -81,7 +81,7 @@ class Label(BaseModel):
 class OzoneGetRepoResponse(BaseModel):
     did: str
     handle: str
-    related_records: Optional[list[Profile]] = Field(alias='relatedRecords')
+    related_records: Optional[list[Any]] = Field(alias='relatedRecords')
     indexed_at: Optional[datetime] = Field(alias='indexedAt')
     moderation: Optional[Moderation]
     labels: Optional[list[Label]]

@@ -103,6 +103,27 @@ def extract_str_domains(s: str) -> List[str]:
     return list(domains)
 
 
+def extract_str_urls(s: str) -> List[str]:
+    potential_urls = re.findall(URL_PATTERN, s, re.VERBOSE | re.IGNORECASE)
+
+    urls: List[str] = []
+
+    for url in potential_urls:
+        url = url.strip()
+
+        if not url.startswith(('http://', 'https://')):
+            url = 'http://' + url
+
+        urls.append(url)
+
+    return urls
+
+
+class ExtractUrls(UDFBase[StringArgumentsBase, List[str]]):
+    def execute(self, execution_context: ExecutionContext, arguments: StringArgumentsBase) -> List[str]:
+        return extract_str_urls(arguments.s)
+
+
 class ExtractDomains(UDFBase[StringArgumentsBase, List[str]]):
     def execute(self, execution_context: ExecutionContext, arguments: StringArgumentsBase) -> List[str]:
         return extract_str_domains(arguments.s)

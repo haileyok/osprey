@@ -74,14 +74,11 @@ services:
         condition: service_healthy
     command: >
       bash -c "
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic osprey.actions_input --partitions 3 --replication-factor 1 &&
-        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic osprey.execution_results --partitions 3 --replication-factor 1 &&
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic osprey.actions_input --partitions 24 --replication-factor 1 &&
+        kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic osprey.execution_results --partitions 24 --replication-factor 1 &&
         kafka-topics --bootstrap-server kafka:29092 --list
       "
-
   osprey-worker:
-    container_name: osprey-worker
-    hostname: osprey-worker
     build:
       context: .
       dockerfile: osprey_worker/Dockerfile
@@ -96,14 +93,16 @@ services:
         condition: service_completed_successfully
       clickhouse:
         condition: service_healthy
+    deploy:
+      replicas: 4
     ports:
-      - "5001:5000"
+      - "127.0.0.1::8089"
     command: ["osprey-worker"]
     environment:
       - PYTHONPATH=/osprey
       - PORT=5000
-      - POSTGRES_HOSTS={"osprey_db":"postgresql://osprey:FoolishPassword@postgres:5432/osprey"}
-      - OSPREY_INPUT_STREAM_SOURCE=kafka
+      - POSTGRES_HOSTS={"osprey_db":"postgresql://osprey:FoolishPassword@postgresosprey:5432/osprey"}
+      - OSPREY_INPUT_STREAM_SOURCE=plugin
       - OSPREY_STDOUT_OUTPUT_SINK=False
       - OSPREY_KAFKA_BOOTSTRAP_SERVERS=["kafka:29092"]
       - OSPREY_KAFKA_INPUT_STREAM_TOPIC=osprey.actions_input
@@ -112,9 +111,10 @@ services:
       - OSPREY_KAFKA_OUTPUT_SINK=True
       - OSPREY_KAFKA_OUTPUT_TOPIC=osprey.execution_results
       - OSPREY_KAFKA_OUTPUT_CLIENT_ID=localhost
+      - OSPREY_KAFKA_GROUP_ID=osprey-workers
       - DD_TRACE_ENABLED=False
       - DD_DOGSTATSD_DISABLE=True
-      - OSPREY_RULES_SINK_NUM_WORKERS=1
+      - OSPREY_RULES_SINK_NUM_WORKERS=80
       - OSPREY_EXECUTION_RESULT_STORAGE_BACKEND=minio
       - OSPREY_MINIO_ENDPOINT=minio:9000
       - OSPREY_MINIO_ACCESS_KEY=minioadmin
@@ -122,7 +122,7 @@ services:
       - OSPREY_MINIO_SECURE=false
       - OSPREY_MINIO_EXECUTION_RESULTS_BUCKET=execution-output
       - SNOWFLAKE_API_ENDPOINT=http://snowflake-id-worker:8088
-      - OSPREY_RULES_PATH=./example_rules
+      - OSPREY_RULES_PATH=./example_rules/
 
       - OSPREY_CLICKHOUSE_HOST=clickhouse
       - OSPREY_CLICKHOUSE_PORT=8123
@@ -136,14 +136,19 @@ services:
       - OSPREY_REDIS_MODE=standalone
       - OSPREY_REDIS_DB=0
 
-      - OSPREY_BLUESKY_IDENTIFIER=
-      - OSPREY_BLUESKY_PASSWORD=
-      - OSPREY_BLUESKY_PDS_URL=
-      - OSPREY_BLUESKY_LABELER_DID=
+      - OSPREY_BLUESKY_IDENTIFIER=${OSPREY_BLUESKY_IDENTIFIER}
+      - OSPREY_BLUESKY_PASSWORD=${OSPREY_BLUESKY_PASSWORD}
+      - OSPREY_BLUESKY_PDS_URL=${OSPREY_BLUESKY_PDS_URL}
+      - OSPREY_BLUESKY_LABELER_DID=${OSPREY_BLUESKY_LABELER_DID}
+
+      - OSPREY_PROM_METRICS_PORT=8089
+      - OSPREY_PROM_METRICS_ADDR=0.0.0.0
+
     volumes:
       - ./osprey_worker:/osprey/osprey_worker
       - ./osprey_rpc:/osprey/osprey_rpc
       - ./example_rules:/osprey/example_rules
+      - ./example_plugins:/osprey/example_plugins
       - ./entrypoint.sh:/osprey/entrypoint.sh
 
   osprey-ui-api:
@@ -154,9 +159,10 @@ services:
     depends_on:
       - osprey-worker
       - clickhouse
-      - postgres
+      - postgresosprey
       - snowflake-id-worker
     ports:
+      - "${TAILNET_IP}:5004:5004"
       - "127.0.0.1:5004:5004"
     command: ["osprey-ui-api"]
     environment:
@@ -165,7 +171,7 @@ services:
       - DEBUG=true
       - FLASK_DEBUG=1
       - FLASK_ENV=development
-      - POSTGRES_HOSTS={"osprey_db":"postgresql://osprey:FoolishPassword@postgres:5432/osprey"}
+      - POSTGRES_HOSTS={"osprey_db":"postgresql://osprey:FoolishPassword@postgresosprey:5432/osprey"}
       - DD_TRACE_ENABLED=False
       - DD_DOGSTATSD_DISABLE=True
       - OSPREY_RULES_PATH=/osprey/example_rules
@@ -180,14 +186,16 @@ services:
       - OSPREY_CLICKHOUSE_DB=default
       - OSPREY_CLICKHOUSE_TABLE=osprey_execution_results
 
-      - OSPREY_BLUESKY_IDENTIFIER=
-      - OSPREY_BLUESKY_PASSWORD=
-      - OSPREY_BLUESKY_PDS_URL=
-      - OSPREY_BLUESKY_LABELER_DID=
+      - OSPREY_BLUESKY_IDENTIFIER=${OSPREY_BLUESKY_IDENTIFIER}
+      - OSPREY_BLUESKY_PASSWORD=${OSPREY_BLUESKY_PASSWORD}
+      - OSPREY_BLUESKY_PDS_URL=${OSPREY_BLUESKY_PDS_URL}
+      - OSPREY_BLUESKY_LABELER_DID=${OSPREY_BLUESKY_LABELER_DID}
+
     volumes:
       - ./osprey_worker:/osprey/osprey_worker
       - ./osprey_rpc:/osprey/osprey_rpc
       - ./example_rules:/osprey/example_rules
+      - ./example_plugins:/osprey/example_plugins
 
   osprey-ui:
     container_name: osprey-ui
@@ -198,10 +206,11 @@ services:
     depends_on:
       - osprey-ui-api
     ports:
+      - "${TAILNET_IP}:5002:5002"
       - "127.0.0.1:5002:5002"
     environment:
       - NODE_ENV=development
-      - REACT_APP_API_BASE_URL=http://localhost:5004
+      - REACT_APP_API_BASE_URL=http://${TAILNET_IP}:5004
     volumes:
       - ./osprey_ui:/app
       - /app/node_modules
@@ -242,12 +251,13 @@ services:
       - /bin/bash
     command: ["/osprey/example_data/generate_test_data.sh"]
 
-  postgres:
-    hostname: postgres
-    container_name: postgres
+  postgresosprey:
+    hostname: postgresosprey
+    container_name: postgresosprey
     image: postgres:18
+    command: postgres -c max_connections=300
     ports:
-      - "127.0.0.1:5432:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - metadata_data:/var/lib/postgresql
     environment:
@@ -271,6 +281,8 @@ services:
     ports:
       - "127.0.0.1:8123:8123"
       - "127.0.0.1:9009:9000"
+      - "${TAILNET_IP}:8123:8123"
+      - "${TAILNET_IP}:9000:9000"
     volumes:
       - clickhouse_data:/var/lib/clickhouse
     environment:
@@ -294,13 +306,15 @@ services:
     restart: "no"
 
   at-kafka:
-    image: ghcr.io/haileyok/at-kafka:main-77d1562
+    # image: ghcr.io/haileyok/at-kafka:main-246660d
+    image: ghcr.io/haileyok/at-kafka:main-6f15f22
     depends_on:
       kafka:
         condition: service_healthy
       clickhouse:
         condition: service_healthy
     container_name: atkafka
+    command: ["firehose", "relay"]
     ports:
       - "127.0.0.1:6010:6009"
     environment:
@@ -309,6 +323,22 @@ services:
       ATKAFKA_OUTPUT_TOPIC: "osprey.actions_input"
       ATKAFKA_OSPREY_COMPATIBLE: "true"
       ATKAFKA_PLC_HOST: "https://plc.directory"
+      ATKAFKA_API_HOST: "https://public.api.bsky.app"
+      ATKAFKA_IGNORED_COLLECTIONS: "app.bsky.feed.like"
+    restart: unless-stopped
+
+  label-consumer:
+    image: ghcr.io/skywatch-bsky/ozone-tail:latest
+    container_name: label-consumer
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    depends_on:
+      postgresosprey:
+        condition: service_healthy
+    environment:
+      LABEL_CONSUMER_LABELERS: '["ozone.skywatch.blue","ozone.hailey.at"]'
+      LABEL_CONSUMER_POSTGRES_DSN: "postgresql://osprey:FoolishPassword@postgresosprey:5432/osprey"
     restart: unless-stopped
 
   redis:
