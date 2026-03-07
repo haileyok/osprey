@@ -264,7 +264,7 @@ class ArgumentsBase:
         return list(ordered_mro)
 
     @classmethod
-    @lru_cache(1)
+    @lru_cache(maxsize=128)
     def items(cls) -> Dict[str, type]:
         fields: Dict[str, type] = {}
 

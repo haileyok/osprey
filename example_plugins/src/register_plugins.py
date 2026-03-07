@@ -12,7 +12,7 @@ from osprey.worker.sinks.sink.output_sink import BaseOutputSink
 from osprey.worker.sinks.utils.acking_contexts import BaseAckingContext
 from output_sinks.clickhouse_execution_results_sink import ClickhouseExecutionResultsSink
 from output_sinks.ozone_label_sink import OzoneLabelSink
-from services.ozone_labels_service import OzoneLabelsService
+from services.local_db_labels_service import LocalDbLabelsService
 from shared.metrics import prom_metrics
 from udfs.atproto.diduri import DidFromUri
 from udfs.atproto.facets import LinksFromFacets, MentionsFromFacets, TagsFromFacets
@@ -40,8 +40,17 @@ from udfs.list import (
     SimpleListContains,
 )
 from udfs.query_udfs.regex import Regex
+from udfs.resolve_urls import ResolveShortenedUrls
 from udfs.sentiment import AnalyzeSentiment
-from udfs.string import ExtractDomains, ExtractEmoji, ExtractListDomains, ForceString, StringContains, SubstrCount
+from udfs.string import (
+    ExtractDomains,
+    ExtractEmoji,
+    ExtractListDomains,
+    ExtractUrls,
+    ForceString,
+    StringContains,
+    SubstrCount,
+)
 from udfs.tokenize import Tokenize
 from udfs.toxicity import AnalyzeToxicity
 
@@ -63,6 +72,7 @@ def register_udfs() -> Sequence[Type[UDFBase[Any, Any]]]:
         RegexListContains,
         CensorizedListContains,
         ForceString,
+        ExtractUrls,
         CacheGetStr,
         CacheGetInt,
         CacheGetFloat,
@@ -84,6 +94,7 @@ def register_udfs() -> Sequence[Type[UDFBase[Any, Any]]]:
         AtprotoList,
         AnalyzeSentiment,
         AnalyzeToxicity,
+        ResolveShortenedUrls,
         # Query UDFs
         Regex,
     ]
@@ -108,5 +119,5 @@ def register_output_sinks(config: Config) -> Sequence[BaseOutputSink]:
 
 @hookimpl_osprey
 def register_labels_service_or_provider(config: Config) -> LabelsServiceBase:
-    """Register a PostgreSQL-backed labels service."""
-    return OzoneLabelsService(config=config)
+    """Register a local-DB-backed labels service."""
+    return LocalDbLabelsService(config=config)
