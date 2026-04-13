@@ -70,6 +70,7 @@ common = [
     { name = "gunicorn", git = "https://github.com/discord/gunicorn.git?rev=979efdcb918daa536d8923668241c6e6bf1edb58" },
     { name = "hash-ring", url = "https://storage.googleapis.com/discord-devops/hash_ring-src-b4b56bc93053881b68b829ee9d1a4871b4aee592.zip" },
     { name = "intervals", specifier = "==0.9.2" },
+    { name = "jslog4kube" },
     { name = "jsonpath-rw", url = "https://github.com/kennknowles/python-jsonpath-rw/archive/6f5647bb3ad2395c20f0191fef07a1df51c9fed8.tar.gz" },
     { name = "minio", specifier = ">=7.2.16" },
     { name = "mmh3", specifier = "==3.0.0" },
@@ -1456,6 +1457,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/4f/e7/65300e6b32e69768ded990494809106f87da1d436418d5f1367ed3966fd7/Jinja2-2.11.3.tar.gz", hash = "sha256:a6d58433de0ae800347cab1fa3043cebbabe8baa9d29e668f1c768cb87a333c6", size = 257589, upload-time = "2021-01-31T16:33:09.175Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/7e/c2/1eece8c95ddbc9b1aeb64f5783a9e07a286de42191b7204d67b7496ddf35/Jinja2-2.11.3-py2.py3-none-any.whl", hash = "sha256:03e47ad063331dd6a3f04a43eddca8a966a26ba0c5b7207a9a9e4e08f1b29419", size = 125699, upload-time = "2021-01-31T16:33:07.289Z" },
+]
+
+[[package]]
+name = "jslog4kube"
+version = "1.0.7"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "python-json-logger" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/5d/ee/7b73bfb29e9eb83264643621885b84cbf6cb951cf8859b1d3ae557d12d01/jslog4kube-1.0.7.tar.gz", hash = "sha256:c6f2a315790c4578ebea05ede8d5ad30bb07234168d19bffb49b6b0f832d6018", size = 13039, upload-time = "2025-07-16T15:03:59.21Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fb/a2/c08a26f92d07f37d5f00ee5a7424efa614fa241ef85b92b7ed58e1cb4e17/jslog4kube-1.0.7-py3-none-any.whl", hash = "sha256:65babc22675259c8b27d977a8e947603b0c0998336157d373c1592a48119a38c", size = 11017, upload-time = "2025-07-16T15:03:58.446Z" },
 ]
 
 [[package]]
