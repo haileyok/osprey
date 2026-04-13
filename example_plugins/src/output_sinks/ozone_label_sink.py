@@ -11,6 +11,9 @@ logger = get_logger('ozone_label_sink')
 
 
 class OzoneLabelSink(BaseOutputSink):
+    timeout = 10
+    max_retries = 2
+
     def __init__(self, config: Config):
         try:
             self._client = OzoneClient.get_instance(config=config)
