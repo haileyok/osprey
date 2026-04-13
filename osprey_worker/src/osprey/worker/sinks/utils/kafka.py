@@ -36,8 +36,14 @@ class ThreadedKafkaConsumer:
         while self._running:
             try:
                 msg = self._consumer.poll(timeout=1.0)
-                if msg is not None:
-                    self._queue.put(msg)
+                if msg is None:
+                    continue
+                while self._running:
+                    try:
+                        self._queue.put_nowait(msg)
+                        break
+                    except gevent.queue.Full:
+                        _real_sleep(0.1)
             except KafkaException as e:
                 logger.error(f'Kafka consumer poll error: {e}')
                 sentry_sdk.capture_exception(e)
