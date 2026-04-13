@@ -24,6 +24,7 @@ class OzoneClient:
             logger.error(f'Failed to create Bluesky session: {e}')
 
         self._pds_url = config.get_str('OSPREY_BLUESKY_PDS_URL', 'https://bsky.social')
+        self._http = requests.Session()
 
     @classmethod
     def get_instance(cls, config: Config) -> 'OzoneClient':
@@ -76,7 +77,7 @@ class OzoneClient:
 
             headers = self._session.get_headers_with_moderation()
 
-            response = requests.post(
+            response = self._http.post(
                 f'{self._pds_url}/xrpc/tools.ozone.moderation.emitEvent',
                 headers=headers,
                 json=payload,
@@ -98,7 +99,7 @@ class OzoneClient:
 
             headers = self._session.get_headers()
 
-            response = requests.post(
+            response = self._http.post(
                 f'{self._pds_url}/xrpc/com.atproto.repo.createRecord', headers=headers, json=payload
             )
             response.raise_for_status()
@@ -115,7 +116,7 @@ class OzoneClient:
         headers = self._session.get_headers_with_moderation()
 
         try:
-            response = requests.get(
+            response = self._http.get(
                 f'{self._session.get_pds_url()}/xrpc/tools.ozone.moderation.getRepo',
                 headers=headers,
                 params=params,
