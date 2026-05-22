@@ -34,6 +34,13 @@ class PromMetrics:
             labelnames=['label', 'status'],
         )
 
+        self.tags_emitted = Counter(
+            name='tags_emitted',
+            namespace=NAMESPACE,
+            documentation='Number of tags emitted to Ozone',
+            labelnames=['tag', 'status'],
+        )
+
         self.event_process_duration = Histogram(
             name='event_process_duration_seconds',
             namespace=NAMESPACE,

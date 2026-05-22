@@ -18,6 +18,7 @@ from udfs.atproto.diduri import DidFromUri
 from udfs.atproto.facets import LinksFromFacets, MentionsFromFacets, TagsFromFacets
 from udfs.atproto.label import AtprotoLabel
 from udfs.atproto.list import AtprotoList
+from udfs.atproto.tag import AtprotoTag
 from udfs.cache import (
     CacheGetFloat,
     CacheGetInt,
@@ -82,6 +83,7 @@ def register_udfs() -> Sequence[Type[UDFBase[Any, Any]]]:
         ConcatStringLists,
         AtprotoLabel,
         AtprotoList,
+        AtprotoTag,
         AnalyzeSentiment,
         AnalyzeToxicity,
         # Query UDFs

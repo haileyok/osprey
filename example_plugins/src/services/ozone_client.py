@@ -85,6 +85,49 @@ class OzoneClient:
         except Exception as e:
             logger.error(f'Failed to emit label event: {e}')
 
+    def add_or_remove_tag(
+        self,
+        entity_id: str,
+        tag: str,
+        neg: bool,
+        comment: str | None = None,
+    ):
+        if self._session is None:
+            logger.error('Bluesky session not initialized, cannot apply tag')
+            return
+
+        try:
+            subject: dict[str, str] = {}
+            if entity_id.startswith('did:'):
+                subject['$type'] = 'com.atproto.admin.defs#repoRef'
+                subject['did'] = entity_id
+            elif entity_id.startswith('at://'):
+                subject['$type'] = 'com.atproto.repo.strongRef'
+                subject['uri'] = entity_id
+
+            payload: dict[str, Any] = {
+                'subject': subject,
+                'createdBy': self._session.get_did(),
+                'subjectBlobCids': [],
+                'event': {
+                    '$type': 'tools.ozone.moderation.defs#modEventTag',
+                    'comment': comment or '',
+                    'add': [tag] if not neg else [],
+                    'remove': [tag] if neg else [],
+                },
+            }
+
+            headers = self._session.get_headers_with_moderation()
+
+            response = requests.post(
+                f'{self._pds_url}/xrpc/tools.ozone.moderation.emitEvent',
+                headers=headers,
+                json=payload,
+            )
+            response.raise_for_status()
+        except Exception as e:
+            logger.error(f'Failed to emit tag event: {e}')
+
     def add_did_to_list(self, did: str, list_uri: str):
         assert self._session is not None
 
